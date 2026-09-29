@@ -1,0 +1,111 @@
+{
+  "schemaVersion": "1.0",
+  "artifactType": "deployment-manifest",
+  "status": "ExampleOnly",
+  "runId": null,
+  "generatedAtUtc": null,
+  "environment": "sandbox",
+  "tenantId": null,
+  "subscriptionId": null,
+  "resourceGroup": {
+    "name": "AEY-EU-SWARMS-SANDBOX-RG-01",
+    "resourceId": null
+  },
+  "provenance": {
+    "sourceConfigSha256": null,
+    "scriptsSha256": null,
+    "bootstrapRunId": null
+  },
+  "resources": {
+    "managedIdentity": {
+      "resourceId": null,
+      "clientId": null,
+      "principalId": null,
+      "name": "AEY-EU-SWARMS-SANDBOX-UAMI-01"
+    },
+    "appServicePlan": {
+      "resourceId": null,
+      "name": "AEY-EU-SWARMS-SANDBOX-ASP-01"
+    },
+    "webApp": {
+      "resourceId": null,
+      "hostName": null,
+      "managedIdentityResourceId": null,
+      "name": "aey-eu-swarms-sandbox-app-01"
+    },
+    "workerVm": {
+      "resourceId": null,
+      "operatingSystem": null,
+      "managedIdentityResourceId": null,
+      "name": "AEY-EU-SWARMS-SANDBOX-VM-01",
+      "computerName": "AEYEUSWRMSBX01"
+    },
+    "sqlServer": {
+      "resourceId": null,
+      "fullyQualifiedDomainName": null,
+      "name": "aey-eu-swarms-sandbox-sql-01"
+    },
+    "keyVault": {
+      "resourceId": null,
+      "vaultUri": null,
+      "name": "aey-eu-swarms-sbx-kv-01"
+    },
+    "deploymentStorage": {
+      "resourceId": null,
+      "blobEndpoint": null,
+      "container": "releases",
+      "name": "aeyeuswarmssbxst01"
+    },
+    "applicationInsights": {
+      "resourceId": null,
+      "name": "AEY-EU-SWARMS-SANDBOX-AI-01",
+      "connectionString": null
+    },
+    "logAnalytics": {
+      "resourceId": null,
+      "name": "AEY-EU-SWARMS-SANDBOX-LAW-01"
+    },
+    "network": {
+      "resourceId": null,
+      "name": "AEY-EU-SWARMS-SANDBOX-VNET-01"
+    },
+    "databases": [
+      {
+        "key": "primary",
+        "name": "AEY-EU-SWARMS-SANDBOX-DB-PRIMARY-01",
+        "resourceId": null
+      },
+      {
+        "key": "secondary",
+        "name": "AEY-EU-SWARMS-SANDBOX-DB-SECONDARY-01",
+        "resourceId": null
+      }
+    ]
+  },
+  "application": {
+    "worker": {
+      "serviceName": "SwarmsWorker",
+      "executable": null,
+      "arguments": null,
+      "healthCommand": null
+    }
+  },
+  "deploymentReadiness": {
+    "web": "NotValidated",
+    "worker": "NotValidated",
+    "database": "NotValidated"
+  },
+  "deploymentNetwork": {
+    "mode": "PublicAllowList",
+    "clientIpv4Cidr": null,
+    "lifetime": "Temporary",
+    "allowRuleChanges": true,
+    "targets": {
+      "sql": true,
+      "keyVault": true,
+      "appServiceScm": true,
+      "appServiceMain": false
+    }
+  },
+  "location": "eastus"
+}

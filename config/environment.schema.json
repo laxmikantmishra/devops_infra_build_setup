@@ -1,0 +1,55 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/schemas/swarms-environment-1.0.json",
+  "title": "Swarms Azure environment",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "environment", "tenantId", "subscriptionId", "location", "resourceGroup", "resources", "databases", "application", "sql", "deploymentNetwork"],
+  "properties": {
+    "schemaVersion": { "const": "1.0" },
+    "environment": { "type": "string", "minLength": 1 },
+    "tenantId": { "type": "string", "format": "uuid" },
+    "subscriptionId": { "type": "string", "format": "uuid" },
+    "location": { "const": "eastus" },
+    "bootstrap": { "type": "object" },
+    "authentication": { "type": "object" },
+    "naming": { "type": "object" },
+    "tags": { "type": "object" },
+    "resourceGroup": { "$ref": "#/$defs/resource" },
+    "resources": { "type": "object", "additionalProperties": { "$ref": "#/$defs/resource" } },
+    "databases": { "type": "array", "items": { "$ref": "#/$defs/database" }, "minItems": 1 },
+    "deploymentNetwork": { "type": "object" },
+    "network": { "type": "object" },
+    "monitoring": { "type": "object" },
+    "keyVault": { "type": "object" },
+    "appService": { "type": "object" },
+    "deploymentStorage": { "type": "object" },
+    "application": { "type": "object" },
+    "sql": { "type": "object" }
+  },
+  "$defs": {
+    "resource": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["mode", "name", "resourceId"],
+      "properties": {
+        "mode": { "enum": ["Create", "Existing", "Auto"] },
+        "name": { "type": ["string", "null"] },
+        "resourceId": { "type": ["string", "null"] }
+      }
+    },
+    "database": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["key", "mode", "name", "resourceId"],
+      "properties": {
+        "key": { "type": "string" },
+        "mode": { "enum": ["Create", "Existing", "Auto"] },
+        "name": { "type": ["string", "null"] },
+        "resourceId": { "type": ["string", "null"] },
+        "edition": { "type": "string" },
+        "serviceObjective": { "type": "string" }
+      }
+    }
+  }
+}

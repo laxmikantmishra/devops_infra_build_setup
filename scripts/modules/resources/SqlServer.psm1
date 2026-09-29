@@ -1,0 +1,11 @@
+Set-StrictMode -Version Latest
+$ErrorActionPreference='Stop'
+function Resolve-SqlServer {
+ [CmdletBinding(SupportsShouldProcess)]param($Configuration,[pscredential]$SqlAdministratorCredential,[switch]$ReuseOnly)
+ Import-Module Az.Sql -ErrorAction Stop;if($Configuration.sql.product -ne 'AzureSqlDatabase'){throw "Only AzureSqlDatabase is implemented; selected '$($Configuration.sql.product)'."};$cfg=$Configuration.resources.sqlServer;$server=Get-AzSqlServer -ResourceGroupName $Configuration.resourceGroup.name -ServerName $cfg.name -ErrorAction SilentlyContinue
+ if($server){if($server.Location -ne $Configuration.location){throw "SQL server is in '$($server.Location)', expected '$($Configuration.location)'."};return [pscustomobject]@{action='Reuse';resource=$server;id=$server.ResourceId;name=$server.ServerName;fullyQualifiedDomainName=$server.FullyQualifiedDomainName;location=$server.Location}}
+ if($cfg.mode -eq 'Existing' -or $ReuseOnly){throw "SQL server '$($cfg.name)' does not exist."};if($null -eq $SqlAdministratorCredential){throw 'SqlAdministratorCredential is required when creating an Azure SQL logical server.'}
+ if($PSCmdlet.ShouldProcess($cfg.name,'Create Azure SQL logical server')){$parameters=@{ResourceGroupName=$Configuration.resourceGroup.name;ServerName=$cfg.name;Location=$Configuration.location;SqlAdministratorCredentials=$SqlAdministratorCredential;ServerVersion='12.0';Tag=$Configuration.tags;ErrorAction='Stop'};$server=New-AzSqlServer @parameters;if(Test-StringPresent $Configuration.sql.entraAdminObjectId){Set-AzSqlServerActiveDirectoryAdministrator -ResourceGroupName $Configuration.resourceGroup.name -ServerName $cfg.name -DisplayName $Configuration.sql.entraAdminDisplayName -ObjectId $Configuration.sql.entraAdminObjectId -ErrorAction Stop|Out-Null};return [pscustomobject]@{action='Create';resource=$server;id=$server.ResourceId;name=$server.ServerName;fullyQualifiedDomainName=$server.FullyQualifiedDomainName;location=$server.Location}}
+ $id="/subscriptions/$($Configuration.subscriptionId)/resourceGroups/$($Configuration.resourceGroup.name)/providers/Microsoft.Sql/servers/$($cfg.name)";[pscustomobject]@{action='Create';id=$id;name=$cfg.name;fullyQualifiedDomainName="$($cfg.name).database.windows.net";location=$Configuration.location;preview=$true}
+}
+Export-ModuleMember -Function Resolve-SqlServer

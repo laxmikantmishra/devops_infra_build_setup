@@ -1,0 +1,14 @@
+Set-StrictMode -Version Latest
+$ErrorActionPreference='Stop'
+function Resolve-Monitoring {
+ [CmdletBinding(SupportsShouldProcess)]param($Configuration,[switch]$ReuseOnly)
+ Import-Module Az.OperationalInsights -ErrorAction Stop;Import-Module Az.ApplicationInsights -ErrorAction Stop
+ $lawCfg=$Configuration.resources.logAnalytics;$law=Get-AzOperationalInsightsWorkspace -ResourceGroupName $Configuration.resourceGroup.name -Name $lawCfg.name -ErrorAction SilentlyContinue
+ if($law -and $law.Location -ne $Configuration.location){throw "Log Analytics workspace '$($lawCfg.name)' is in '$($law.Location)', expected '$($Configuration.location)'."};if(-not $law){if($lawCfg.mode -eq 'Existing' -or $ReuseOnly){throw "Log Analytics workspace '$($lawCfg.name)' does not exist."};if($PSCmdlet.ShouldProcess($lawCfg.name,'Create Log Analytics workspace')){$law=New-AzOperationalInsightsWorkspace -ResourceGroupName $Configuration.resourceGroup.name -Name $lawCfg.name -Location $Configuration.location -Sku PerGB2018 -RetentionInDays $Configuration.monitoring.retentionDays -Tag $Configuration.tags -ErrorAction Stop}}
+ $lawId=if($law){$law.ResourceId}else{"/subscriptions/$($Configuration.subscriptionId)/resourceGroups/$($Configuration.resourceGroup.name)/providers/Microsoft.OperationalInsights/workspaces/$($lawCfg.name)"}
+ $aiCfg=$Configuration.resources.applicationInsights;$ai=Get-AzApplicationInsights -ResourceGroupName $Configuration.resourceGroup.name -Name $aiCfg.name -ErrorAction SilentlyContinue
+ if($ai -and $ai.Location -ne $Configuration.location){throw "Application Insights '$($aiCfg.name)' is in '$($ai.Location)', expected '$($Configuration.location)'."};if($ai -and $ai.WorkspaceResourceId -and $ai.WorkspaceResourceId -ne $lawId){throw "Application Insights '$($aiCfg.name)' is linked to a different Log Analytics workspace."};if(-not $ai){if($aiCfg.mode -eq 'Existing' -or $ReuseOnly){throw "Application Insights '$($aiCfg.name)' does not exist."};if($PSCmdlet.ShouldProcess($aiCfg.name,'Create workspace-based Application Insights')){$ai=New-AzApplicationInsights -ResourceGroupName $Configuration.resourceGroup.name -Name $aiCfg.name -Location $Configuration.location -Kind web -WorkspaceResourceId $lawId -Tag $Configuration.tags -ErrorAction Stop}}
+ $aiId=if($ai){$ai.Id}else{"/subscriptions/$($Configuration.subscriptionId)/resourceGroups/$($Configuration.resourceGroup.name)/providers/Microsoft.Insights/components/$($aiCfg.name)"}
+ [pscustomobject]@{action=if($law -and $ai){'Resolved'}else{'Create'};logAnalytics=[pscustomobject]@{id=$lawId;name=$lawCfg.name;resource=$law};applicationInsights=[pscustomobject]@{id=$aiId;name=$aiCfg.name;resource=$ai;connectionString=if($ai){$ai.ConnectionString}else{$null}};preview=(-not $law -or -not $ai)}
+}
+Export-ModuleMember -Function Resolve-Monitoring

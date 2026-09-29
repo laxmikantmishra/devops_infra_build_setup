@@ -1,0 +1,23 @@
+# Generated deployment reports and artifacts
+.artifacts/
+# Local environment configuration; commit sanitized examples only
+config/*.json
+!config/*.example.json
+!config/*.schema.json
+config/*.env
+!config/*.env.example
+# Local secrets and credentials
+.env
+.env.*
+!.env.example
+*.pfx
+*.p12
+*.pem
+*.key
+# Application build output
+bin/
+obj/
+# Local editor/OS files
+.DS_Store
+.vscode/
+.idea/

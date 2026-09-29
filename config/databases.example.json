@@ -1,0 +1,18 @@
+[
+  {
+    "key": "primary",
+    "mode": "Auto",
+    "name": "AEY-EU-SWARMS-SANDBOX-DB-PRIMARY-01",
+    "resourceId": null,
+    "edition": "GeneralPurpose",
+    "serviceObjective": "GP_S_Gen5_1"
+  },
+  {
+    "key": "secondary",
+    "mode": "Auto",
+    "name": "AEY-EU-SWARMS-SANDBOX-DB-SECONDARY-01",
+    "resourceId": null,
+    "edition": "GeneralPurpose",
+    "serviceObjective": "GP_S_Gen5_1"
+  }
+]

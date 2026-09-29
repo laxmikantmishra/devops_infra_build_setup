@@ -1,0 +1,167 @@
+{
+  "schemaVersion": "1.0",
+  "environment": "sandbox",
+  "tenantId": null,
+  "subscriptionId": null,
+  "location": "eastus",
+  "bootstrap": {
+    "registerRequiredProviders": true
+  },
+  "deploymentNetwork": {
+    "mode": "PublicAllowList",
+    "clientIpv4Cidr": null,
+    "lifetime": "Temporary",
+    "targets": {
+      "sql": true,
+      "keyVault": true,
+      "appServiceScm": true,
+      "appServiceMain": false
+    }
+  },
+  "resourceGroup": {
+    "mode": "Auto",
+    "name": "AEY-EU-SWARMS-SANDBOX-RG-01",
+    "resourceId": null
+  },
+  "tags": {
+    "application": "askey-swarms-sandbox",
+    "environment": "sandbox",
+    "location": "eastus"
+  },
+  "resources": {
+    "managedIdentity": {
+      "mode": "Auto",
+      "name": "AEY-EU-SWARMS-SANDBOX-UAMI-01",
+      "resourceId": null
+    },
+    "network": {
+      "mode": "Auto",
+      "name": "AEY-EU-SWARMS-SANDBOX-VNET-01",
+      "resourceId": null
+    },
+    "logAnalytics": {
+      "mode": "Auto",
+      "name": "AEY-EU-SWARMS-SANDBOX-LAW-01",
+      "resourceId": null
+    },
+    "applicationInsights": {
+      "mode": "Auto",
+      "name": "AEY-EU-SWARMS-SANDBOX-AI-01",
+      "resourceId": null
+    },
+    "keyVault": {
+      "mode": "Auto",
+      "name": "aey-eu-swarms-sbx-kv-01",
+      "resourceId": null
+    },
+    "deploymentStorage": {
+      "mode": "Auto",
+      "name": "aeyeuswarmssbxst01",
+      "resourceId": null
+    },
+    "appServicePlan": {
+      "mode": "Auto",
+      "name": "AEY-EU-SWARMS-SANDBOX-ASP-01",
+      "resourceId": null
+    },
+    "webApp": {
+      "mode": "Auto",
+      "name": "aey-eu-swarms-sandbox-app-01",
+      "resourceId": null
+    },
+    "workerVm": {
+      "mode": "Auto",
+      "name": "AEY-EU-SWARMS-SANDBOX-VM-01",
+      "resourceId": null
+    },
+    "sqlServer": {
+      "mode": "Auto",
+      "name": "aey-eu-swarms-sandbox-sql-01",
+      "resourceId": null
+    }
+  },
+  "databases": [
+    {
+      "key": "primary",
+      "mode": "Auto",
+      "name": "AEY-EU-SWARMS-SANDBOX-DB-PRIMARY-01",
+      "resourceId": null
+    },
+    {
+      "key": "secondary",
+      "mode": "Auto",
+      "name": "AEY-EU-SWARMS-SANDBOX-DB-SECONDARY-01",
+      "resourceId": null
+    }
+  ],
+  "application": {
+    "web": {
+      "managedIdentityResourceKey": "managedIdentity",
+      "operatingSystem": null,
+      "runtime": null,
+      "healthPath": "/",
+      "useStagingSlot": false,
+      "appSettings": {}
+    },
+    "worker": {
+      "managedIdentityResourceKey": "managedIdentity",
+      "operatingSystem": null,
+      "runtime": null,
+      "computerName": "AEYEUSWRMSBX01",
+      "vmSize": "Standard_B2s",
+      "adminUsername": "azureuser",
+      "sshPublicKeyPath": null,
+      "image": {
+        "publisher": null,
+        "offer": null,
+        "sku": null,
+        "version": "latest"
+      },
+      "serviceName": "SwarmsWorker",
+      "executable": null,
+      "arguments": null,
+      "healthCommand": null
+    }
+  },
+  "deploymentStorage": {
+    "sku": "Standard_LRS",
+    "container": "releases"
+  },
+  "network": {
+    "addressPrefix": "10.42.0.0/16",
+    "workerSubnetName": "snet-worker",
+    "workerSubnetPrefix": "10.42.1.0/24",
+    "appSubnetName": "snet-app",
+    "appSubnetPrefix": "10.42.2.0/24"
+  },
+  "monitoring": {
+    "retentionDays": 30
+  },
+  "keyVault": {
+    "enableRbac": true,
+    "secretNames": []
+  },
+  "appService": {
+    "sku": "B1",
+    "workerCount": 1
+  },
+  "sql": {
+    "product": null,
+    "entraAdminDisplayName": null,
+    "entraAdminObjectId": null,
+    "defaultEdition": "GeneralPurpose",
+    "defaultServiceObjective": "GP_S_Gen5_1",
+    "runtimeRoles": ["db_datareader", "db_datawriter"]
+  },
+  "authentication": {
+    "mode": "Interactive",
+    "clientId": null,
+    "certificateThumbprint": null
+  },
+  "naming": {
+    "applicationName": "askey-swarms-sandbox",
+    "resourceNamePrefix": "AEY-EU-SWARMS-SANDBOX",
+    "shortResourceNamePrefix": "AEY-EU-SWARMS-SBX",
+    "instance": "01"
+  }
+}
