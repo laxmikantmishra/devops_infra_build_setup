@@ -35,7 +35,7 @@ In `sandbox.env`:
 1. Set `TENANT_ID` and `SUBSCRIPTION_ID`.
 2. Change `DATABASES_FILE` to `databases.json` and edit that file for every required database.
 3. Set `WEB_OS` to `Linux` or `Windows`, and set the App Service runtime string in `WEB_RUNTIME` (for example, an App Service stack value supported by the selected OS).
-4. Set `WORKER_OS`, `WORKER_EXECUTABLE`, and optional `WORKER_ARGUMENTS`.
+4. Set `WORKER_OS` for VM provisioning. `WORKER_EXECUTABLE` and optional `WORKER_ARGUMENTS` are release settings and are required only before a Worker or All deployment.
 5. For Linux, set `WORKER_SSH_PUBLIC_KEY_PATH`. For Windows, supply `-VmAdministratorCredential` when Provisioning creates the VM.
 6. Set `SQL_PRODUCT=AzureSqlDatabase`, `SQL_ENTRA_ADMIN_DISPLAY_NAME`, and `SQL_ENTRA_ADMIN_OBJECT_ID`.
 7. For public endpoint deployment, set `DEPLOYMENT_CLIENT_IPV4` to the deployment machine's public egress IPv4 with `/32`. The scripts never detect this address automatically. Use `DEPLOYMENT_NETWORK_MODE=Private` only from a machine that can reach the private endpoints.

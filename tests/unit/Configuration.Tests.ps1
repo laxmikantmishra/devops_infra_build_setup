@@ -37,8 +37,17 @@ Describe 'Environment configuration parsing' {
         $configuration=Import-EnvironmentConfiguration (Join-Path $PSScriptRoot '../../config/sandbox.env.example')
         $configuration.tenantId='11111111-1111-1111-1111-111111111111';$configuration.subscriptionId='22222222-2222-2222-2222-222222222222'
         $configuration.deploymentNetwork.clientIpv4Cidr='8.8.8.8/32';$configuration.sql.product='AzureSqlDatabase';$configuration.sql.entraAdminDisplayName='Sql Admins';$configuration.sql.entraAdminObjectId='33333333-3333-3333-3333-333333333333'
-        $configuration.application.web.operatingSystem='Linux';$configuration.application.web.runtime='DOTNETCORE|8.0';$configuration.application.worker.operatingSystem='Linux';$configuration.application.worker.executable='Swarms.Worker'
+        $configuration.application.web.operatingSystem='Linux';$configuration.application.web.runtime='DOTNETCORE|8.0';$configuration.application.worker.operatingSystem='Linux';$configuration.application.worker.executable=$null
         $keyPath=Join-Path $TestDrive 'worker.pub';Set-Content $keyPath 'ssh-ed25519 AAAATEST';$configuration.application.worker.sshPublicKeyPath=$keyPath
         Test-EnvironmentConfiguration $configuration Provisioning | Should -BeTrue
+    }
+
+    It 'requires the worker executable only for a worker deployment' {
+        $configuration=Import-EnvironmentConfiguration (Join-Path $PSScriptRoot '../../config/sandbox.env.example')
+        $configuration.application.worker.operatingSystem='Linux';$configuration.application.worker.executable=$null
+        { Test-DeploymentTargetConfiguration $configuration Web } | Should -Not -Throw
+        { Test-DeploymentTargetConfiguration $configuration Worker } | Should -Throw '*WORKER_EXECUTABLE*'
+        $configuration.application.worker.executable='Swarms.Worker'
+        Test-DeploymentTargetConfiguration $configuration Worker | Should -BeTrue
     }
 }

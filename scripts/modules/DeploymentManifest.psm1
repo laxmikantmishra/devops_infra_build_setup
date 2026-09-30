@@ -39,7 +39,7 @@ function Import-DeploymentManifest {
 
 function Convert-ManifestToConfiguration {
     param($Manifest)
-    [ordered]@{schemaVersion='1.0';environment=$Manifest.environment;tenantId=$Manifest.tenantId;subscriptionId=$Manifest.subscriptionId;location=$Manifest.location;authentication=[ordered]@{mode='Interactive';clientId=$null;certificateThumbprint=$null};resourceGroup=[ordered]@{mode='Existing';name=$Manifest.resourceGroup.name;resourceId=$Manifest.resourceGroup.resourceId};deploymentNetwork=$Manifest.deploymentNetwork;application=[ordered]@{web=[ordered]@{healthPath=$Manifest.resources.webApp.healthPath};worker=$Manifest.application.worker};resources=$Manifest.resources}
+    [ordered]@{schemaVersion='1.0';environment=$Manifest.environment;tenantId=$Manifest.tenantId;subscriptionId=$Manifest.subscriptionId;location=$Manifest.location;authentication=[ordered]@{mode='Interactive';clientId=$null;certificateThumbprint=$null};resourceGroup=[ordered]@{mode='Existing';name=$Manifest.resourceGroup.name;resourceId=$Manifest.resourceGroup.resourceId};deploymentNetwork=$Manifest.deploymentNetwork;application=[ordered]@{web=[ordered]@{healthPath=$Manifest.resources.webApp.healthPath};worker=[ordered]@{operatingSystem=$Manifest.resources.workerVm.operatingSystem;serviceName=$Manifest.application.worker.serviceName;executable=$Manifest.application.worker.executable;arguments=$Manifest.application.worker.arguments;healthCommand=$Manifest.application.worker.healthCommand}};resources=$Manifest.resources}
 }
 
 Export-ModuleMember -Function New-DeploymentManifest,Import-DeploymentManifest,Convert-ManifestToConfiguration
