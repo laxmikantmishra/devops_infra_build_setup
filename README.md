@@ -37,7 +37,7 @@ Validation, discovery, planning, network access, configuration, and verification
 
 ## Usage
 
-Follow [the step-by-step sandbox runbook](docs/runbook.md) for local setup, input preparation, individual commands, expected outputs, and stop conditions. It distinguishes preparation you can do now from deployment steps awaiting implementation.
+Follow [the step-by-step sandbox runbook](docs/runbook.md) for local setup, input preparation, Bootstrap, Provisioning, package deployment, expected outputs, and troubleshooting. For a new environment, complete Bootstrap before Provisioning; a WhatIf preview does not create the required group or shared identity. Existing local environment files must explicitly include `SQL_AUTHENTICATION_MODE=Sql` to select SQL username/password authentication.
 
 Copy [config/sandbox.env.example](config/sandbox.env.example) to `config/sandbox.env` and fill in the target environment, resource, runtime, SQL administrator, SSH key, and deployment IP settings.
 
