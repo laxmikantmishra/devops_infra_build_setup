@@ -447,6 +447,7 @@ Stop at the first failed step. Preserve the full error text, command, and report
 | SQL login failure | Confirm the server, current SQL username/password, and database access. An existing server password is not reset; Entra-only server policy needs a separate approved review |
 | SQL timeout or firewall failure | Check public egress IP, enabled SQL rule scope, and routing/DNS. ReuseOnly opens no rules; Private mode needs preexisting private connectivity |
 | SCM inherits restricted main-site rules | Review the main-site rule policy. Authorize `DEPLOYMENT_ALLOW_APP_SERVICE_MAIN` only if intended, or arrange equivalent existing access |
+| App Service Plan reports `East US`, expected `eastus` | These are the same Azure region. Use the updated `Common.psm1` and resource modules, which compare location names ignoring whitespace and case. Keep `LOCATION=eastus`, preserve the existing plan, and rerun Provisioning with the same credentials. `East US 2` and other regions still fail validation |
 | Resource location, OS, name conflict or quota failure | Correct the actual configuration/approved resource choice; do not change eastus, rename resources randomly, or delete resources to bypass it |
 | Artifact path or worker executable missing | Build the real package, verify its location/layout, and update release settings before retrying |
 | `CleanupFailed` or interrupted process | Inspect the run's `network-access.json` and live rules. Verify ownership, scope and exact rule state before any cleanup; preserve unrelated/equivalent rules |

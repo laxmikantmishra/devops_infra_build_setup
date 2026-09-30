@@ -8,7 +8,7 @@ function Resolve-DeploymentStorage {
     Import-Module Az.Storage -ErrorAction Stop
     $desired = $Configuration.resources.deploymentStorage
     Write-DeploymentStatus -Stage DeploymentStorage -Status Read -Message "Retrieving deployment storage account $($desired.name)...";$account = Get-AzStorageAccount -ResourceGroupName $Configuration.resourceGroup.name -Name $desired.name -ErrorAction SilentlyContinue
-    if($account){if($account.Location -ne $Configuration.location){throw "Deployment storage account '$($desired.name)' is in '$($account.Location)', expected '$($Configuration.location)'."};if($account.EnableHttpsTrafficOnly -eq $false){throw "Deployment storage account '$($desired.name)' must require HTTPS."};if($account.AllowBlobPublicAccess -eq $true){throw "Deployment storage account '$($desired.name)' must disable blob public access."}}
+    if($account){if((-not (Test-AzureLocationMatch -Actual $account.Location -Expected $Configuration.location))){throw "Deployment storage account '$($desired.name)' is in '$($account.Location)', expected '$($Configuration.location)'."};if($account.EnableHttpsTrafficOnly -eq $false){throw "Deployment storage account '$($desired.name)' must require HTTPS."};if($account.AllowBlobPublicAccess -eq $true){throw "Deployment storage account '$($desired.name)' must disable blob public access."}}
     if ($account) { Write-DeploymentStatus -Stage DeploymentStorage -Status Reuse -Message "Using existing storage account $($desired.name)." }
     if (-not $account) {
         if ($desired.mode -eq 'Existing' -or $ReuseOnly) { throw "Deployment storage account '$($desired.name)' does not exist." }

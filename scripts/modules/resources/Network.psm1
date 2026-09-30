@@ -20,7 +20,7 @@ function Resolve-Network {
     Import-Module Az.Network -ErrorAction Stop
     $desired=$Configuration.resources.network;Write-DeploymentStatus -Stage Network -Status Read -Message "Retrieving virtual network $($desired.name)...";$vnet=Get-TargetNetwork $Configuration
     if($vnet){
-        if($vnet.Location -ne $Configuration.location){throw "VNet '$($desired.name)' is in '$($vnet.Location)', expected '$($Configuration.location)'."}
+        if((-not (Test-AzureLocationMatch -Actual $vnet.Location -Expected $Configuration.location))){throw "VNet '$($desired.name)' is in '$($vnet.Location)', expected '$($Configuration.location)'."}
         $worker=$vnet.Subnets|Where-Object Name -eq $Configuration.network.workerSubnetName;$app=$vnet.Subnets|Where-Object Name -eq $Configuration.network.appSubnetName
         if(-not $worker -or -not $app){throw 'Existing VNet is missing required worker/app subnets.'}
         if($worker.AddressPrefix -ne $Configuration.network.workerSubnetPrefix -or $app.AddressPrefix -ne $Configuration.network.appSubnetPrefix){throw 'Existing VNet subnet prefixes do not match configuration.'}

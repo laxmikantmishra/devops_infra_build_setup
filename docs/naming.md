@@ -47,3 +47,7 @@ Use uppercase for readable resource names where allowed. Use lowercase for SQL s
 - The two database names are examples until the application's actual database map is supplied. Do not rename existing databases to match these samples.
 
 The configuration and scripts apply these names. Global-name availability is validated by Azure during provisioning; conflicts require an explicit override.
+
+### Comparing reported locations
+
+Azure cmdlets can return a location display name such as `East US` or its programmatic identifier `eastus`. Resource validation uses the shared `Test-AzureLocationMatch` helper to ignore case and whitespace when comparing these forms. Authored configuration remains `LOCATION=eastus`; resource output values are preserved. Digits and punctuation are not removed, and missing locations never match. `East US 2`, `West US`, and `global` do not match `eastus`. No resource move, replacement, or region fallback is performed. See [Microsoft's region names](https://learn.microsoft.com/azure/reliability/regions-list).
