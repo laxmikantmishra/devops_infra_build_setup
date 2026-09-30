@@ -146,7 +146,8 @@
     "workerCount": 1
   },
   "sql": {
-    "product": null,
+    "product": "AzureSqlDatabase",
+    "authenticationMode": "Sql",
     "entraAdminDisplayName": null,
     "entraAdminObjectId": null,
     "defaultEdition": "GeneralPurpose",

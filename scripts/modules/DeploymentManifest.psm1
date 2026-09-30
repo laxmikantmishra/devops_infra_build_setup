@@ -22,6 +22,7 @@ function New-DeploymentManifest {
         }
         application=[ordered]@{worker=[ordered]@{serviceName=$Configuration.application.worker.serviceName;executable=$Configuration.application.worker.executable;arguments=$Configuration.application.worker.arguments;healthCommand=$Configuration.application.worker.healthCommand}}
         deploymentNetwork=[ordered]@{mode=$Configuration.deploymentNetwork.mode;clientIpv4Cidr=$Configuration.deploymentNetwork.clientIpv4Cidr;lifetime=$Configuration.deploymentNetwork.lifetime;targets=$Configuration.deploymentNetwork.targets;allowRuleChanges=(-not $ReuseOnly)}
+        sql=[ordered]@{authenticationMode=(Get-SqlAuthenticationMode $Configuration)}
         verification=$Verification;provenance=$Provenance
     }
 }
@@ -33,13 +34,14 @@ function Import-DeploymentManifest {
     if($manifest.schemaVersion -ne '1.0' -or $manifest.artifactType -ne 'deployment-manifest' -or $manifest.status -ne 'Ready'){throw 'Manifest must be a ready deployment-manifest with schemaVersion 1.0.'}
     foreach($field in 'tenantId','subscriptionId','environment','location'){if(-not(Test-StringPresent $manifest[$field])){throw "Manifest field '$field' is required."}}
     foreach($key in 'managedIdentity','deploymentStorage','webApp','workerVm','sqlServer'){Assert-AzureResourceId "manifest resources.$key.resourceId" $manifest.resources[$key].resourceId}
+    $null=Get-SqlAuthenticationMode $manifest
     $manifest['_sourcePath']=$resolved;$manifest['_sourceSha256']=Get-FileSha256 $resolved
     $manifest
 }
 
 function Convert-ManifestToConfiguration {
     param($Manifest)
-    [ordered]@{schemaVersion='1.0';environment=$Manifest.environment;tenantId=$Manifest.tenantId;subscriptionId=$Manifest.subscriptionId;location=$Manifest.location;authentication=[ordered]@{mode='Interactive';clientId=$null;certificateThumbprint=$null};resourceGroup=[ordered]@{mode='Existing';name=$Manifest.resourceGroup.name;resourceId=$Manifest.resourceGroup.resourceId};deploymentNetwork=$Manifest.deploymentNetwork;application=[ordered]@{web=[ordered]@{healthPath=$Manifest.resources.webApp.healthPath};worker=[ordered]@{operatingSystem=$Manifest.resources.workerVm.operatingSystem;serviceName=$Manifest.application.worker.serviceName;executable=$Manifest.application.worker.executable;arguments=$Manifest.application.worker.arguments;healthCommand=$Manifest.application.worker.healthCommand}};resources=$Manifest.resources}
+    [ordered]@{schemaVersion='1.0';environment=$Manifest.environment;tenantId=$Manifest.tenantId;subscriptionId=$Manifest.subscriptionId;location=$Manifest.location;authentication=[ordered]@{mode='Interactive';clientId=$null;certificateThumbprint=$null};resourceGroup=[ordered]@{mode='Existing';name=$Manifest.resourceGroup.name;resourceId=$Manifest.resourceGroup.resourceId};deploymentNetwork=$Manifest.deploymentNetwork;application=[ordered]@{web=[ordered]@{healthPath=$Manifest.resources.webApp.healthPath};worker=[ordered]@{operatingSystem=$Manifest.resources.workerVm.operatingSystem;serviceName=$Manifest.application.worker.serviceName;executable=$Manifest.application.worker.executable;arguments=$Manifest.application.worker.arguments;healthCommand=$Manifest.application.worker.healthCommand}};resources=$Manifest.resources;sql=[ordered]@{authenticationMode=(Get-SqlAuthenticationMode $Manifest)}}
 }
 
 Export-ModuleMember -Function New-DeploymentManifest,Import-DeploymentManifest,Convert-ManifestToConfiguration

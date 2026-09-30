@@ -25,7 +25,19 @@
     "appService": { "type": "object" },
     "deploymentStorage": { "type": "object" },
     "application": { "type": "object" },
-    "sql": { "type": "object" }
+    "sql": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "product": { "enum": ["AzureSqlDatabase"] },
+        "authenticationMode": { "enum": ["Sql", "Entra"], "default": "Entra" },
+        "entraAdminDisplayName": { "type": ["string", "null"] },
+        "entraAdminObjectId": { "type": ["string", "null"] },
+        "defaultEdition": { "type": "string" },
+        "defaultServiceObjective": { "type": "string" },
+        "runtimeRoles": { "type": "array", "items": { "type": "string" } }
+      }
+    }
   },
   "$defs": {
     "resource": {

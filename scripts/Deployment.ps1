@@ -59,6 +59,7 @@ $run=$null;$networkAccess=$null;$resources=$null
 try {
     if($PSCmdlet.ParameterSetName -eq 'Manifest'){$manifest=Import-DeploymentManifest -Path $ManifestPath;$configuration=Convert-ManifestToConfiguration $manifest;$inputHash=$manifest._sourceSha256;$inputProvenance=[ordered]@{manifestPath=$manifest._sourcePath;manifestSha256=$inputHash}}else{$configuration=Import-EnvironmentConfiguration -Path $ConfigPath;$null=Test-EnvironmentConfiguration -Configuration $configuration -Operation Deployment -Target $Target;$inputProvenance=Get-ConfigurationProvenance -Configuration $configuration -ScriptsRoot $PSScriptRoot;$inputHash=$inputProvenance.sourceSha256}
     $null=Test-DeploymentTargetConfiguration -Configuration $configuration -Target $Target
+    if ($needDatabase -and (Get-SqlAuthenticationMode $configuration) -eq 'Sql' -and -not $DatabaseCredential -and -not $WhatIfPreference) { throw 'DatabaseCredential is required for SQL-authenticated database releases. Supply a PSCredential.' }
     $run=New-RunContext -Environment $configuration.environment -Operation Deployment -OutputDirectory $OutputDirectory -WhatIf:$WhatIfPreference
     $null=Connect-DeploymentAzure -Configuration $configuration -AuthMode $AuthMode -AuthClientId $AuthClientId -CertificateThumbprint $CertificateThumbprint -NonInteractive:$NonInteractive
     $null=Test-SubscriptionReadiness -Configuration $configuration -Operation Deployment

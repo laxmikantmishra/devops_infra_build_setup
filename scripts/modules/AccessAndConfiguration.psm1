@@ -16,6 +16,7 @@ function Ensure-RoleAssignment {
 function Set-SqlManagedIdentityUsers {
     [CmdletBinding(SupportsShouldProcess)]
     param($Configuration,$Resources)
+    if ((Get-SqlAuthenticationMode $Configuration) -eq 'Sql') { return }
     if (-not (Get-Module -ListAvailable SqlServer)) { throw 'The SqlServer PowerShell module is required to configure the managed identity in databases.' }
     Import-Module SqlServer -ErrorAction Stop
     $tokenResult = Get-AzAccessToken -ResourceUrl 'https://database.windows.net' -ErrorAction Stop

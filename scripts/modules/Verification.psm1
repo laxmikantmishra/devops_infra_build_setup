@@ -1,8 +1,31 @@
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
+function Test-SqlDatabaseAccess {
+    param($Configuration,$Resources,[pscredential]$SqlAdministratorCredential)
+    $mode = Get-SqlAuthenticationMode $Configuration
+    if ($mode -eq 'Sql' -and -not $SqlAdministratorCredential) { throw 'SqlAdministratorCredential is required for SQL-authenticated readiness checks.' }
+    if (-not (Get-Module -ListAvailable SqlServer)) { throw 'The SqlServer PowerShell module is required for database readiness checks.' }
+    Import-Module SqlServer -ErrorAction Stop
+    $parameters = @{ServerInstance=$Resources.sqlServer.fullyQualifiedDomainName;Encrypt='Mandatory';ErrorAction='Stop';ConnectionTimeout=30;QueryTimeout=30}
+    if ($mode -eq 'Sql') {
+        $parameters.Credential = $SqlAdministratorCredential
+        $parameters.Query = 'SELECT 1 AS Connected'
+    } else {
+        $tokenResult = Get-AzAccessToken -ResourceUrl 'https://database.windows.net' -ErrorAction Stop
+        $parameters.AccessToken = if ($tokenResult.Token -is [securestring]) { [Net.NetworkCredential]::new('', $tokenResult.Token).Password } else { [string]$tokenResult.Token }
+        $literal = $Resources.managedIdentity.name.Replace("'", "''")
+        $parameters.Query = "SELECT name FROM sys.database_principals WHERE name=N'$literal'"
+    }
+    foreach ($db in $Resources.databases) {
+        $found = @(Invoke-Sqlcmd @parameters -Database $db.name)
+        $checkName = if ($mode -eq 'Sql') { "databaseSqlConnectivity:$($db.key)" } else { "databaseIdentity:$($db.key)" }
+        [pscustomobject]@{name=$checkName;ready=($found.Count -gt 0);resourceId=$db.id;authenticationMode=$mode}
+    }
+}
+
 function Test-ProvisionedInfrastructure {
-    param($Configuration,$Resources)
+    param($Configuration,$Resources,[pscredential]$SqlAdministratorCredential)
     Import-Module Az.Websites,Az.Compute,Az.Resources,Az.Sql -ErrorAction Stop
     $checks=[Collections.Generic.List[object]]::new()
     foreach($item in @(@('resourceGroup',$Resources.resourceGroup.id),@('managedIdentity',$Resources.managedIdentity.id),@('keyVault',$Resources.keyVault.id),@('deploymentStorage',$Resources.deploymentStorage.id),@('webApp',$Resources.appService.webApp.id),@('workerVm',$Resources.workerVm.id),@('sqlServer',$Resources.sqlServer.id))){$checks.Add([pscustomobject]@{name=$item[0];ready=(Test-StringPresent $item[1]);resourceId=$item[1]})}
@@ -19,10 +42,7 @@ function Test-ProvisionedInfrastructure {
         $assignment=Get-AzRoleAssignment -ObjectId $Resources.managedIdentity.principalId -Scope $role.scope -ErrorAction Stop|Where-Object RoleDefinitionId -Match "$($role.id)$"
         $checks.Add([pscustomobject]@{name=$role.name;ready=[bool]$assignment;resourceId=$role.scope})
     }
-    if(Get-Module -ListAvailable SqlServer){
-        Import-Module SqlServer -ErrorAction Stop;$tokenResult=Get-AzAccessToken -ResourceUrl 'https://database.windows.net' -ErrorAction Stop;$token=if($tokenResult.Token -is [securestring]){[Net.NetworkCredential]::new('',$tokenResult.Token).Password}else{[string]$tokenResult.Token};$literal=$Resources.managedIdentity.name.Replace("'","''")
-        foreach($db in $Resources.databases){$found=@(Invoke-Sqlcmd -ServerInstance $Resources.sqlServer.fullyQualifiedDomainName -Database $db.name -AccessToken $token -Query "SELECT name FROM sys.database_principals WHERE name=N'$literal'" -Encrypt Mandatory -ErrorAction Stop);$checks.Add([pscustomobject]@{name="databaseIdentity:$($db.key)";ready=($found.Count -gt 0);resourceId=$db.id})}
-    }else{$checks.Add([pscustomobject]@{name='databaseIdentity';ready=$false;resourceId=$Resources.sqlServer.id;reason='SqlServer module is missing.'})}
+    foreach ($check in @(Test-SqlDatabaseAccess -Configuration $Configuration -Resources $Resources -SqlAdministratorCredential $SqlAdministratorCredential)) { $checks.Add($check) }
     $failed=@($checks|Where-Object{-not $_.ready});if($failed.Count){throw "Provisioning readiness checks failed: $($failed.name -join ', ')."}
     [pscustomobject]@{ready=$true;checks=@($checks)}
 }

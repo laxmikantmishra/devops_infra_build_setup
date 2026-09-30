@@ -55,10 +55,21 @@ function Assert-AzureResourceId { param([string]$Name,[string]$Value,[switch]$Al
 function Get-ResourceIdPart { param([string]$ResourceId,[ValidateSet('SubscriptionId','ResourceGroupName','Provider','Type','Name')][string]$Part) $s=$ResourceId.Trim('/').Split('/');switch($Part){SubscriptionId{$s[1]}ResourceGroupName{$s[3]}Provider{$s[5]}Type{$s[-2]}Name{$s[-1]}} }
 function Get-PublicIPv4FromCidr { param([string]$Cidr) if(-not(Test-StringPresent $Cidr)){throw 'A public IPv4 /32 CIDR is required.'};if($Cidr -notmatch '^((?:\d{1,3}\.){3}\d{1,3})/32$'){throw 'Client IP must be an IPv4 /32 CIDR.'};$parsed=$null;if(-not[Net.IPAddress]::TryParse($Matches[1],[ref]$parsed)-or $parsed.AddressFamily -ne [Net.Sockets.AddressFamily]::InterNetwork){throw 'Client IP must be a valid IPv4 address.'};$b=$parsed.GetAddressBytes();$reserved=($b[0] -in 0,10,127 -or $b[0] -ge 224 -or ($b[0] -eq 100 -and $b[1] -ge 64 -and $b[1] -le 127) -or ($b[0] -eq 169 -and $b[1] -eq 254) -or ($b[0] -eq 172 -and $b[1] -ge 16 -and $b[1] -le 31) -or ($b[0] -eq 192 -and (($b[1] -eq 168) -or ($b[1] -eq 0 -and $b[2] -eq 2))) -or ($b[0] -eq 198 -and (($b[1] -in 18,19) -or ($b[1] -eq 51 -and $b[2] -eq 100))) -or ($b[0] -eq 203 -and $b[1] -eq 0 -and $b[2] -eq 113));if($reserved){throw 'Client IP must be a public, routable IPv4 address; private and documentation ranges are not allowed.'};$parsed.ToString() }
 
+function Get-SqlAuthenticationMode {
+    param([Parameter(Mandatory)]$Configuration)
+    # Older configuration files and manifests used Entra implicitly.
+    $mode = 'Entra'
+    if ($Configuration.Contains('sql') -and $Configuration.sql -and $Configuration.sql.Contains('authenticationMode')) {
+        $mode = $Configuration.sql.authenticationMode
+    }
+    Assert-ValueInSet 'SQL_AUTHENTICATION_MODE' $mode @('Sql','Entra')
+    return $mode
+}
+
 function Complete-RunReport {
     param([Parameter(Mandatory)]$RunContext,[Parameter(Mandatory)][string]$Status,[string]$ErrorMessage)
     $report=[ordered]@{schemaVersion='1.0';runId=$RunContext.RunId;environment=$RunContext.Environment;operation=$RunContext.Operation;status=$Status;startedAtUtc=$RunContext.StartedAtUtc;completedAtUtc=(Get-Date).ToUniversalTime().ToString('o');whatIf=$RunContext.WhatIf;error=$ErrorMessage;events=@($RunContext.Events)}
     if(-not $RunContext.WhatIf){Write-JsonFileAtomic -Path (Join-Path $RunContext.Directory 'run-report.json') -InputObject $report};[pscustomobject]$report
 }
 
-Export-ModuleMember -Function New-RunContext,Add-RunEvent,Write-JsonFileAtomic,Get-FileSha256,Get-ScriptsSha256,ConvertTo-PlainHashtable,Test-StringPresent,ConvertTo-BooleanValue,Assert-ValueInSet,Assert-AzureResourceId,Get-ResourceIdPart,Get-PublicIPv4FromCidr,Complete-RunReport
+Export-ModuleMember -Function New-RunContext,Add-RunEvent,Write-JsonFileAtomic,Get-FileSha256,Get-ScriptsSha256,ConvertTo-PlainHashtable,Test-StringPresent,ConvertTo-BooleanValue,Assert-ValueInSet,Assert-AzureResourceId,Get-ResourceIdPart,Get-PublicIPv4FromCidr,Complete-RunReport,Get-SqlAuthenticationMode

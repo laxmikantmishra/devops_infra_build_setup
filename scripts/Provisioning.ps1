@@ -41,6 +41,7 @@ $run=$null;$networkAccess=$null;$bootstrap=$null
 try {
     $configuration=Import-EnvironmentConfiguration -Path $ConfigPath
     $null=Test-EnvironmentConfiguration -Configuration $configuration -Operation Provisioning -ReuseOnly:$ReuseOnly
+    if ((Get-SqlAuthenticationMode $configuration) -eq 'Sql' -and -not $SqlAdministratorCredential -and -not $WhatIfPreference) { throw 'SqlAdministratorCredential is required for SQL-authenticated provisioning readiness checks, including ReuseOnly. Supply a PSCredential; do not put passwords in configuration.' }
     $run=New-RunContext -Environment $configuration.environment -Operation Provisioning -OutputDirectory $OutputDirectory -WhatIf:$WhatIfPreference
     $null=Connect-DeploymentAzure -Configuration $configuration -AuthMode $AuthMode -AuthClientId $AuthClientId -CertificateThumbprint $CertificateThumbprint -NonInteractive:$NonInteractive
     $readiness=Test-SubscriptionReadiness -Configuration $configuration -Operation Provisioning
@@ -54,7 +55,7 @@ try {
     $networkAccess=Open-DeploymentNetworkAccess -Configuration $configuration -ResolvedResources $resources -RunContext $run -AllowChanges:(-not $ReuseOnly)
     try {
         $access=Invoke-AccessAndConfiguration -Configuration $configuration -Resources $resources -ReuseOnly:$ReuseOnly
-        $verification=Test-ProvisionedInfrastructure -Configuration $configuration -Resources $resources
+        $verification=Test-ProvisionedInfrastructure -Configuration $configuration -Resources $resources -SqlAdministratorCredential $SqlAdministratorCredential
     } finally {
         Close-DeploymentNetworkAccess -Configuration $configuration -NetworkAccess $networkAccess -ResolvedResources $resources
         $networkAccess=$null
