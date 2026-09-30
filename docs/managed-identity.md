@@ -2,14 +2,15 @@
 
 ## Design
 
-Create or reuse one user-assigned managed identity per environment, in the application's resource group. Attach it to both App Service and the worker VM. Both workloads authenticate to their dependencies as this shared principal. User-assigned identities support assignment to multiple Azure resources. [Microsoft identity overview](https://learn.microsoft.com/en-us/entra/identity/managed-identities-azure-resources/overview)
+Create or reuse one user-assigned managed identity per environment, in the application's resource group. Attach it to both App Service and the worker VM. Both workloads use this shared principal for Key Vault, deployment storage, and supported telemetry. The selected SQL mode uses SQL username/password authentication separately. User-assigned identities support assignment to multiple Azure resources. [Microsoft identity overview](https://learn.microsoft.com/en-us/entra/identity/managed-identities-azure-resources/overview)
 
 ```mermaid
 flowchart LR
     Web[App Service] -->|uses| Identity[Shared user-assigned identity]
     Worker[Worker VM] -->|uses| Identity
     Identity -->|read approved secrets| Vault[Key Vault]
-    Identity -->|database user and explicit grants| SQL[Required SQL databases]
+    Web -->|SQL credentials from vault| SQL[Required SQL databases]
+    Worker -->|SQL credentials from vault| SQL
     Identity -->|authenticated telemetry| Insights[Application Insights]
 ```
 
@@ -38,12 +39,12 @@ Record the attached identity resource ID for web and worker. Validate that all I
 | App Service | Attach the shared identity, preserve existing identities, explicitly select it in the application's credential configuration |
 | Worker VM | Attach the same identity, preserve existing identities, explicitly select it in the worker's supported credential implementation |
 | Key Vault | For an RBAC-enabled vault, grant Key Vault Secrets User at the intended vault scope for application secret reads; no secret-management permissions by default |
-| Each required SQL database | Provision a database principal for the identity and grant only the configured runtime operations; no default db_owner or migration privileges |
+| Each required SQL database | Selected Sql mode: application-specific SQL login and grants, configured separately. Optional Entra mode: database principal for the identity with configured runtime roles |
 | Application Insights | Grant Monitoring Metrics Publisher on the specific Application Insights resource for supported Entra-authenticated telemetry ingestion |
 
 For App Service Key Vault references, set `keyVaultReferenceIdentity` to the identity's **resource ID**. The VM worker retrieves secrets through its own supported credential/SDK. For existing access-policy vaults, preserve the authorization model and implement equivalent explicitly scoped secret permissions if supported by the chosen configuration path. Do not switch a vault to RBAC silently. [Key Vault references](https://learn.microsoft.com/en-us/azure/app-service/app-service-key-vault-references)
 
-SQL setup depends on the selected SQL product and driver. For the provisional Azure SQL Database design, verify Entra administration, create the identity's database user in each required database, and configure token-based application connections. Azure RBAC alone does not grant SQL query access. Record object/schema permissions or approved database roles per database before access setup can be marked ready. [Configure SQL Entra authentication](https://learn.microsoft.com/en-us/azure/azure-sql/database/authentication-aad-configure)
+SQL setup depends on the selected SQL product and driver. Only when `SQL_AUTHENTICATION_MODE=Entra`, verify Entra administration, create the identity's database user in each required database, and configure token-based application connections. Azure RBAC alone does not grant SQL query access. Record object/schema permissions or approved database roles per database before access setup can be marked ready. [Configure SQL Entra authentication](https://learn.microsoft.com/en-us/azure/azure-sql/database/authentication-aad-configure)
 
 If automated SQL principal creation requires a server identity with directory lookup permissions, configure that as a separate SQL platform prerequisite. Do not grant directory permissions to the shared web/worker identity simply to bootstrap database users. Migration and bootstrap permissions belong to the deployment identity. [SQL service principal setup](https://learn.microsoft.com/en-us/azure/azure-sql/database/authentication-aad-service-principal)
 

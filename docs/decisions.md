@@ -2,6 +2,8 @@
 
 ## Confirmed
 
+- SQL product: Azure SQL Database on a logical server, with SQL username/password authentication (`SQL_AUTHENTICATION_MODE=Sql`). No Entra SQL administrator is required for this mode.
+
 - Environment: sandbox. Azure region: eastus for all regional application resources.
 - Application identifier/tag: askey-swarms-sandbox. Resource naming prefix: AEY-EU-SWARMS-SANDBOX, instance 01; retain EU as the requested naming token. Shorten SANDBOX to SBX where required by service limits and use a separate compact VM guest hostname.
 - Use PowerShell and Az modules; no Bicep.
@@ -23,8 +25,7 @@
 | Existing resource IDs and allowed changes | Not provided |
 | Web application stack, build process, runtime, OS | Not provided |
 | Worker OS, runtime, service installation, shutdown behavior | Not provided |
-| SQL Database vs Managed Instance vs SQL Server VM | Not confirmed |
-| Database names, tiers, authentication, migration tooling | Not provided |
+| Database names, tiers, migration tooling, runtime credential retrieval | Not provided; SQL username/password authentication selected |
 | Runtime SQL grants, vault authorization model, telemetry authentication support | To be verified for the selected application/runtime |
 | Networking and deployment runner reachability | Not provided |
 | Deployment public egress IPv4/32 or private route, IP-rule lifetime | Actual address/route not provided; draft defaults to temporary public allowlisting |

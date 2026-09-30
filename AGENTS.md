@@ -45,14 +45,14 @@ The three PowerShell workflows and resource/release modules are implemented. The
 | Azure target | Tenant/subscription IDs remain required; sandbox, eastus and the naming convention are selected |
 | Web application | Language/framework, runtime version, Windows or Linux, source/build commands, artifact format, health endpoint |
 | Worker | Windows Service or Linux systemd service, runtime, startup arguments, queue/job behavior, shutdown/drain behavior, health signal |
-| SQL product | Azure SQL Database on a logical SQL server, SQL Managed Instance, or SQL Server on a VM |
+| SQL product | Selected: Azure SQL Database on a logical SQL server with SQL username/password authentication |
 | Databases | Names, sizing, service tiers, optional elastic pool, authentication, migration tooling, backup/retention requirements |
 | Existing resources | Explicit resource IDs where available, ownership, compatibility, and whether changes are allowed |
 | Networking | Public endpoints with restrictions or private access; deployment runner reachability; application outbound dependencies |
 | Operations | Availability needs, allowed downtime, release strategy, recovery objectives, monitoring retention, budget |
 | Delivery | Local execution or CI/CD, build location, artifact storage, deployment identity |
 
-The provisional architecture below assumes Azure SQL Database with one logical server and many databases. This is a design assumption, not a settled requirement. Validate application compatibility before selecting it. A single worker VM is also a single point of failure; record whether this meets the application's availability needs.
+The selected architecture uses Azure SQL Database with one logical server and many databases, using SQL username/password authentication. `SQL_AUTHENTICATION_MODE=Sql` skips Entra administrator assignment and managed-identity SQL user setup. Keep credentials out of authored configuration and artifacts; runtime SQL users/grants and secret retrieval remain application-specific. A single worker VM is also a single point of failure; record whether this meets the application's availability needs.
 
 ## Architecture and resource boundaries
 
@@ -263,7 +263,7 @@ Maintain documentation and meaningful tests alongside each phase. Add CI/CD only
 - Keep runtime identity permissions separate from provisioning, local deployment, SQL bootstrap, and migration permissions. Do not grant the shared runtime identity broad group-level management roles or directory permissions for setup convenience. Sharing a principal gives both workloads all its grants; document this shared trust boundary.
 - Configure scoped Key Vault secret-read access, explicit users and runtime grants in each required database, and Monitoring Metrics Publisher on the Application Insights resource when the selected SDK/agent supports Entra-authenticated ingestion. Never assume Azure RBAC grants SQL query access. Confirm exact SQL grants and runtime support before marking readiness.
 - Select the shared identity explicitly in each application's supported credentials. For App Service Key Vault references set `keyVaultReferenceIdentity` to its resource ID. Verify access from the actual web and worker hosts with bounded propagation retries. Identity does not replace network connectivity or application authentication configuration. Follow `docs/managed-identity.md` for the detailed access plan.
-- Prefer identity-based SQL authentication when the application supports it. Otherwise retrieve credentials securely at runtime. Never store credentials in deployment outputs.
+- Use the selected SQL username/password authentication and retrieve credentials securely at runtime. Retain optional Entra mode for explicitly configured environments. Never store credentials in deployment outputs.
 - Use App Service Key Vault references where appropriate. The VM worker needs its own supported secret retrieval mechanism; App Service references do not apply automatically to VM processes.
 - Configure HTTPS/TLS, vault soft-delete/purge protection for new vaults, restrictive inbound access, and explicit retention policies. Do not alter protection settings on reused resources silently.
 - Do not expose SQL to all Azure services or open RDP/SSH to the internet as a shortcut. Select a supported deployment route that the runner can actually reach.

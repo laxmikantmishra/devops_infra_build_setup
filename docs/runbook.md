@@ -21,7 +21,7 @@ $modules = @(
 Install-Module $modules -Scope CurrentUser -Repository PSGallery -Force -AllowClobber
 ```
 
-The operator needs subscription/resource-group permissions to create the configured resources and role assignments. Provisioning SQL managed-identity users also requires the signed-in operator to be the configured Microsoft Entra administrator of the Azure SQL logical server. Worker deployment requires permission to list the deployment Storage account keys and invoke VM Run Command.
+The operator needs subscription/resource-group permissions to create the configured resources and role assignments. The selected SQL username/password mode does not require an Entra SQL administrator or directory permissions for SQL access. Azure permissions to provision resources and assign the non-SQL runtime roles are still required. Optional Entra mode requires an authorized Entra database administrator for SQL user setup. Worker deployment requires permission to list the deployment Storage account keys and invoke VM Run Command.
 
 ## 2. Prepare configuration
 
@@ -37,7 +37,7 @@ In `sandbox.env`:
 3. Set `WEB_OS` to `Linux` or `Windows`, and set the App Service runtime string in `WEB_RUNTIME` (for example, an App Service stack value supported by the selected OS).
 4. Set `WORKER_OS` for VM provisioning. `WORKER_EXECUTABLE` and optional `WORKER_ARGUMENTS` are release settings and are required only before a Worker or All deployment.
 5. For Linux, set `WORKER_SSH_PUBLIC_KEY_PATH`. For Windows, supply `-VmAdministratorCredential` when Provisioning creates the VM.
-6. Set `SQL_PRODUCT=AzureSqlDatabase`, `SQL_ENTRA_ADMIN_DISPLAY_NAME`, and `SQL_ENTRA_ADMIN_OBJECT_ID`.
+6. Set `SQL_PRODUCT=AzureSqlDatabase` and `SQL_AUTHENTICATION_MODE=Sql`. Leave both `SQL_ENTRA_ADMIN_*` fields blank; they are ignored in SQL mode. Pass credentials securely using the parameters below.
 7. For public endpoint deployment, set `DEPLOYMENT_CLIENT_IPV4` to the deployment machine's public egress IPv4 with `/32`. The scripts never detect this address automatically. Use `DEPLOYMENT_NETWORK_MODE=Private` only from a machine that can reach the private endpoints.
 8. Review every `Auto`, `Create`, or `Existing` mode. `Existing` requires its complete Azure resource ID. Globally unique service names might need explicit name overrides.
 
@@ -78,7 +78,7 @@ Bootstrap registers only the required missing resource providers when `BOOTSTRAP
 
 ## 4. Provision infrastructure
 
-If a new Azure SQL server will be created, obtain its local administrator credential without writing it to disk:
+For SQL-mode provisioning, obtain the SQL credential without writing it to disk. For a new server this sets the administrator; for an existing server it checks database connectivity without changing the login:
 
 ```powershell
 $sqlAdmin = Get-Credential -Message 'Azure SQL local administrator'
@@ -106,21 +106,27 @@ Apply it, optionally binding the run to a Bootstrap artifact:
   -VmAdministratorCredential $vmAdmin
 ```
 
-Omit a credential when the corresponding existing resource is reused or the selected OS does not need it. A successful run writes:
+In SQL mode, always supply `-SqlAdministratorCredential` for provisioning, including existing servers and `-ReuseOnly`: it is used to check connectivity to each database. For a new server it also sets the initial SQL administrator. Reuse never resets passwords. Omit the VM credential when reusing a VM or when the selected OS does not need it. A successful run writes:
 
 ```text
 .artifacts/sandbox/<run-id>/deployment-manifest.json
 ```
 
-Provisioning creates or resolves the VNet/subnets, monitoring resources, Key Vault, deployment Storage account, Azure SQL server/databases, App Service plan/app, worker NIC/VM, and shared identity. It grants the runtime identity Key Vault secret read, Storage blob read, monitoring publisher access, and SQL database roles. Temporary client `/32` rules are removed before the manifest is published.
+Provisioning creates or resolves the VNet/subnets, monitoring resources, Key Vault, deployment Storage account, Azure SQL server/databases, App Service plan/app, worker NIC/VM, and shared identity. It grants the runtime identity Key Vault secret read, Storage blob read, monitoring publisher access, and, only in Entra mode, SQL database roles. SQL mode checks the supplied SQL login with a read-only query in each database. This checks runner connectivity, not application runtime permissions or migration privileges. Temporary client `/32` rules are removed before the manifest is published.
 
 To inventory an already complete environment without changing resources or permissions:
 
 ```powershell
-./scripts/Provisioning.ps1 -ConfigPath ./config/sandbox.env -ReuseOnly
+./scripts/Provisioning.ps1 -ConfigPath ./config/sandbox.env -ReuseOnly -SqlAdministratorCredential $sqlAdmin
 ```
 
 Every configured resource must already exist for `-ReuseOnly`.
+
+The non-secret `sql.authenticationMode` is included in generated manifests. Older configurations/manifests that omit it retain the previous `Entra` behavior; set the mode explicitly in authored configuration and regenerate a manifest to select SQL authentication.
+
+Application SQL connection settings remain application-specific. Store runtime credentials in Key Vault and use App Service Key Vault references or the worker's supported secret retrieval code. These scripts do not create or rotate runtime SQL logins, inject the administrator password into the application, or prove runtime SQL access. Configure runtime users/grants and test the actual application before release. `SQL_RUNTIME_ROLES` is used only by Entra mode.
+
+SQL credentials are passed as in-memory `PSCredential` objects, not password command arguments or environment-file values. See Microsoft's [New-AzSqlServer credential parameter](https://learn.microsoft.com/en-us/powershell/module/az.sql/new-azsqlserver) and [Invoke-Sqlcmd credential parameter](https://learn.microsoft.com/en-us/powershell/module/sqlserver/invoke-sqlcmd).
 
 ## 5. Build local release artifacts
 
@@ -132,6 +138,12 @@ Database scripts must be repeatable or maintain their own migration ledger. The 
 
 ## 6. Deploy code
 
+Obtain the deployment SQL login securely; it must have the permissions required by your migration scripts. Use a separate restricted application login for runtime access.
+
+```powershell
+$databaseCredential = Get-Credential -Message 'SQL database deployment login'
+```
+
 Deploy all application packages with an optional database migration:
 
 ```powershell
@@ -140,7 +152,8 @@ Deploy all application packages with an optional database migration:
   -Target All `
   -WebArtifactPath ./publish/web.zip `
   -WorkerArtifactPath ./publish/worker.zip `
-  -DatabaseArtifactPath ./publish/sql
+  -DatabaseArtifactPath ./publish/sql `
+  -DatabaseCredential $databaseCredential
 ```
 
 Deploy targets independently:
@@ -148,10 +161,10 @@ Deploy targets independently:
 ```powershell
 ./scripts/Deployment.ps1 -ConfigPath ./config/sandbox.env -Target Web -WebArtifactPath ./publish/web.zip
 ./scripts/Deployment.ps1 -ConfigPath ./config/sandbox.env -Target Worker -WorkerArtifactPath ./publish/worker.zip
-./scripts/Deployment.ps1 -ConfigPath ./config/sandbox.env -Target Database -DatabaseArtifactPath ./publish/sql
+./scripts/Deployment.ps1 -ConfigPath ./config/sandbox.env -Target Database -DatabaseArtifactPath ./publish/sql -DatabaseCredential $databaseCredential
 ```
 
-`-Target All` requires Web and Worker packages. It executes database scripts first only when `-DatabaseArtifactPath` is supplied, then deploys Web and Worker. Use `-DatabaseCredential` only when SQL authentication is intentionally required; otherwise the signed-in Entra identity supplies an access token.
+`-Target All` requires Web and Worker packages. It executes database scripts first only when `-DatabaseArtifactPath` is supplied, then deploys Web and Worker. With `SQL_AUTHENTICATION_MODE=Sql`, `-DatabaseCredential` is required whenever database scripts are selected, for either config or manifest input. Missing credentials fail before Azure changes; there is no Entra fallback. Web/Worker-only releases and `-WhatIf` previews do not require SQL credentials. Optional Entra mode uses the signed-in identity when no SQL credential override is supplied.
 
 Worker deployment uploads the ZIP to the private `releases` container, invokes VM Run Command, downloads from the VM using its managed identity, installs/restarts the service, and removes the staged blob in `finally`.
 

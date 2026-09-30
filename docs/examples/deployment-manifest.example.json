@@ -5,6 +5,7 @@
   "runId": null,
   "generatedAtUtc": null,
   "environment": "sandbox",
+  "sql": { "authenticationMode": "Sql" },
   "tenantId": null,
   "subscriptionId": null,
   "resourceGroup": {

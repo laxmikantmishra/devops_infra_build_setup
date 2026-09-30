@@ -50,3 +50,9 @@ Keep desired configuration, observed resource manifests, and local application p
 Validate only the fields and permissions needed by the selected script/target. Bootstrap must not require web packages, final SQL grants or VM runtime choices it does not use; Deployment must not demand creation-only SKU/image settings for existing targets. Resolve references needed for selected targets without reading irrelevant files. Every script produces internal sanitized plans/reports and access journals. None of the successful handoff artifacts grants authentication or guarantees current reachability. `-WhatIf` must perform no Azure, guest, or database mutations and must not emit a successful handoff artifact.
 
 See [bootstrap and network details](bootstrap-and-network-access.md) and [the README commands](../README.md).
+
+## SQL username/password authentication
+
+The selected sandbox configuration uses `SQL_AUTHENTICATION_MODE=Sql` (`sql.authenticationMode` in JSON). Provisioning exports the mode in the manifest; conversion for manifest-only releases preserves it. Older inputs without this field retain Entra behavior. SQL mode does not assign an Entra administrator or provision managed-identity SQL users.
+
+Provisioning requires an in-memory `-SqlAdministratorCredential`, including ReuseOnly, to verify runner connectivity to each database. Database releases require `-DatabaseCredential` with permissions for the selected scripts. Preview and Web/Worker-only releases do not require it. Neither credential is exported. SQL connectivity checks do not verify application runtime credentials/grants; configure and test these separately using the application's supported Key Vault retrieval mechanism.

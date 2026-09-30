@@ -44,7 +44,8 @@ Copy [config/sandbox.env.example](config/sandbox.env.example) to `config/sandbox
 ```powershell
 ./scripts/Bootstrap.ps1 -ConfigPath ./config/sandbox.env
 
-./scripts/Provisioning.ps1 -ConfigPath ./config/sandbox.env
+$sqlAdmin = Get-Credential -Message 'SQL administrator / provisioning check login'
+./scripts/Provisioning.ps1 -ConfigPath ./config/sandbox.env -SqlAdministratorCredential $sqlAdmin
 
 # Deploy directly to existing resources using configuration.
 ./scripts/Deployment.ps1 -ConfigPath ./config/sandbox.env -Target Web -WebArtifactPath ./publish/web.zip
@@ -60,6 +61,8 @@ Replace `./path/to/` with the actual reported output paths. Each script supports
 For fully existing infrastructure, `Provisioning.ps1 -ReuseOnly` will validate existing resources/configuration and export a manifest without resource or access changes. Deployment can skip both other scripts when its targets already exist, using configuration or a saved manifest. Create/Auto in deployment input never authorizes resource creation.
 
 Each script authenticates independently. **An existing deployment SPN is not required:** the default is interactive Azure PowerShell login with the operator's account and MFA. See [authentication](docs/authentication.md) for optional SPN/certificate and Azure-runner identity modes. The scripts do not create a custom app registration as a side effect of login.
+
+The sandbox examples select Azure SQL Database with SQL username/password authentication (`SQL_AUTHENTICATION_MODE=Sql`). Entra SQL administrator fields are unnecessary in this mode. Provisioning takes `-SqlAdministratorCredential` for creation/readiness, and database releases take `-DatabaseCredential`; passwords stay out of configuration and manifests. Application runtime SQL credentials and grants remain application-specific; see the runbook.
 
 The shared runtime managed identity is attached to web and worker and remains separate from operator authentication. Explicit deployment-client allowlist settings are handled internally with per-run cleanup. Deployment may manage only narrowly scoped client rules authorized by the selected configuration/manifest; it never provisions application resources or repairs runtime identity/database permissions.
 
