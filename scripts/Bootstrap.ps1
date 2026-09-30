@@ -30,10 +30,12 @@ $modules=Join-Path $PSScriptRoot 'modules'
 foreach($name in 'Common','Configuration','Authentication','Prerequisites','resources/ResourceGroup','resources/ManagedIdentity','Bootstrap'){Import-Module (Join-Path $modules "$name.psm1") -Force -ErrorAction Stop}
 $run=$null
 try {
+    Write-DeploymentStatus -Stage Bootstrap -Status Read -Message 'Loading and validating input configuration...'
     $configuration=Import-EnvironmentConfiguration -Path $ConfigPath
     $null=Test-EnvironmentConfiguration -Configuration $configuration -Operation Bootstrap
     $run=New-RunContext -Environment $configuration.environment -Operation Bootstrap -OutputDirectory $OutputDirectory -WhatIf:$WhatIfPreference
     Add-RunEvent $run Info "Authenticating to subscription $($configuration.subscriptionId)."
+    Add-RunEvent $run Info "Starting Bootstrap for $($configuration.environment). Preview: $WhatIfPreference. Run: $($run.RunId)"
     $null=Connect-DeploymentAzure -Configuration $configuration -AuthMode $AuthMode -AuthClientId $AuthClientId -CertificateThumbprint $CertificateThumbprint -NonInteractive:$NonInteractive
     $null=Test-SubscriptionReadiness -Configuration $configuration -Operation Bootstrap
     $provenance=Get-ConfigurationProvenance -Configuration $configuration -ScriptsRoot $PSScriptRoot
@@ -44,5 +46,6 @@ try {
     [pscustomobject]@{Status=if($WhatIfPreference){'Preview'}else{'Succeeded'};ArtifactPath=if($WhatIfPreference){$null}else{$path};RunDirectory=$run.Directory}
 } catch {
     if($run){Add-RunEvent $run Error $_.Exception.Message;$null=Complete-RunReport -RunContext $run -Status Failed -ErrorMessage $_.Exception.Message}
+    if(-not $run){Write-DeploymentStatus -Stage Bootstrap -Status Error -Message 'Input validation or initialization failed; see the error below.'}
     throw
 }

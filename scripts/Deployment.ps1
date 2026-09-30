@@ -57,26 +57,32 @@ foreach($path in @($WebArtifactPath,$WorkerArtifactPath,$DatabaseArtifactPath)|W
 
 $run=$null;$networkAccess=$null;$resources=$null
 try {
+    Write-DeploymentStatus -Stage Deployment -Status Read -Message 'Loading and validating input configuration...'
     if($PSCmdlet.ParameterSetName -eq 'Manifest'){$manifest=Import-DeploymentManifest -Path $ManifestPath;$configuration=Convert-ManifestToConfiguration $manifest;$inputHash=$manifest._sourceSha256;$inputProvenance=[ordered]@{manifestPath=$manifest._sourcePath;manifestSha256=$inputHash}}else{$configuration=Import-EnvironmentConfiguration -Path $ConfigPath;$null=Test-EnvironmentConfiguration -Configuration $configuration -Operation Deployment -Target $Target;$inputProvenance=Get-ConfigurationProvenance -Configuration $configuration -ScriptsRoot $PSScriptRoot;$inputHash=$inputProvenance.sourceSha256}
     $null=Test-DeploymentTargetConfiguration -Configuration $configuration -Target $Target
     if ($needDatabase -and (Get-SqlAuthenticationMode $configuration) -eq 'Sql' -and -not $DatabaseCredential -and -not $WhatIfPreference) { throw 'DatabaseCredential is required for SQL-authenticated database releases. Supply a PSCredential.' }
     $run=New-RunContext -Environment $configuration.environment -Operation Deployment -OutputDirectory $OutputDirectory -WhatIf:$WhatIfPreference
+    Add-RunEvent $run Info "Starting Deployment for $($configuration.environment). Preview: $WhatIfPreference. Run: $($run.RunId)"
     $null=Connect-DeploymentAzure -Configuration $configuration -AuthMode $AuthMode -AuthClientId $AuthClientId -CertificateThumbprint $CertificateThumbprint -NonInteractive:$NonInteractive
     $null=Test-SubscriptionReadiness -Configuration $configuration -Operation Deployment
+    Add-RunEvent $run Info "Resolving existing targets for $Target and validating live prerequisites..."
     if($PSCmdlet.ParameterSetName -eq 'Manifest'){$null=Test-ManifestResourcesLive -Manifest $manifest -Target $Target -IncludeDatabase:$needDatabase;$resources=Convert-ManifestToResolvedResources $manifest}else{$resources=Resolve-ExistingInfrastructure -Configuration $configuration -Target $Target -IncludeDatabase:$needDatabase}
     $allowChanges=if($PSCmdlet.ParameterSetName -eq 'Manifest'){[bool]$manifest.deploymentNetwork.allowRuleChanges}else{$true}
     $configuration.deploymentNetwork.targets.sql=[bool]($configuration.deploymentNetwork.targets.sql -and $needDatabase)
     $configuration.deploymentNetwork.targets.keyVault=$false
     $configuration.deploymentNetwork.targets.appServiceScm=[bool]($configuration.deploymentNetwork.targets.appServiceScm -and $needWeb)
     $configuration.deploymentNetwork.targets.appServiceMain=[bool]($configuration.deploymentNetwork.targets.appServiceMain -and $needWeb)
+    Add-RunEvent $run Info 'Checking authorized network access for selected release targets...'
     $networkAccess=Open-DeploymentNetworkAccess -Configuration $configuration -ResolvedResources $resources -RunContext $run -ClientIpv4 $ClientIpv4 -AllowChanges:$allowChanges -WhatIf:$WhatIfPreference
     try {
         $releases=[Collections.Generic.List[object]]::new();$health=@()
-        if($needDatabase){$releases.Add((Publish-DatabaseRelease -Configuration $configuration -Resources $resources -ArtifactPath $DatabaseArtifactPath -DatabaseCredential $DatabaseCredential -WhatIf:$WhatIfPreference))}
-        if($needWeb){$releases.Add((Publish-WebRelease -Configuration $configuration -Resources $resources -ArtifactPath $WebArtifactPath -WhatIf:$WhatIfPreference));if(-not $WhatIfPreference){$health+=Test-WebReleaseHealth -Configuration $configuration -Resources $resources}}
-        if($needWorker){$releases.Add((Publish-WorkerRelease -Configuration $configuration -Resources $resources -ArtifactPath $WorkerArtifactPath -GuestScriptsRoot (Join-Path $PSScriptRoot 'guest') -WhatIf:$WhatIfPreference))}
+        if($needDatabase){Add-RunEvent $run Info 'Processing the database release...';$releases.Add((Publish-DatabaseRelease -Configuration $configuration -Resources $resources -ArtifactPath $DatabaseArtifactPath -DatabaseCredential $DatabaseCredential -WhatIf:$WhatIfPreference));Add-RunEvent $run $(if($WhatIfPreference){'Plan'}else{'Success'}) "Database release: $($releases[-1].status)."}
+        if($needWeb){Add-RunEvent $run Info 'Processing the web release...';$releases.Add((Publish-WebRelease -Configuration $configuration -Resources $resources -ArtifactPath $WebArtifactPath -WhatIf:$WhatIfPreference));Add-RunEvent $run $(if($WhatIfPreference){'Plan'}else{'Success'}) "Web release: $($releases[-1].status).";if(-not $WhatIfPreference){$health+=Test-WebReleaseHealth -Configuration $configuration -Resources $resources}}
+        if($needWorker){Add-RunEvent $run Info 'Processing the worker release...';$releases.Add((Publish-WorkerRelease -Configuration $configuration -Resources $resources -ArtifactPath $WorkerArtifactPath -GuestScriptsRoot (Join-Path $PSScriptRoot 'guest') -WhatIf:$WhatIfPreference));Add-RunEvent $run $(if($WhatIfPreference){'Plan'}else{'Success'}) "Worker release: $($releases[-1].status)."}
     } finally {
+        Add-RunEvent $run Info 'Finalizing deployment network access and cleaning temporary rules...'
         Close-DeploymentNetworkAccess -Configuration $configuration -NetworkAccess $networkAccess -ResolvedResources $resources -WhatIf:$WhatIfPreference
+        Add-RunEvent $run $(if($WhatIfPreference){'Plan'}else{'Success'}) 'Network access finalization completed.'
         $networkAccess=$null
     }
     $report=[ordered]@{schemaVersion='1.0';artifactType='release-report';status=if($WhatIfPreference){'Preview'}else{'Succeeded'};runId=$run.RunId;generatedAtUtc=(Get-Date).ToUniversalTime().ToString('o');environment=$configuration.environment;tenantId=$configuration.tenantId;subscriptionId=$configuration.subscriptionId;target=$Target;inputSha256=$inputHash;inputProvenance=$inputProvenance;releases=@($releases);health=$health}
@@ -89,5 +95,6 @@ try {
         if(-not $WhatIfPreference){$failed=[ordered]@{schemaVersion='1.0';artifactType='release-report';status='Failed';runId=$run.RunId;generatedAtUtc=(Get-Date).ToUniversalTime().ToString('o');environment=$run.Environment;target=$Target;error=$_.Exception.Message};Write-JsonFileAtomic -Path (Join-Path $run.Directory 'release-report.json') -InputObject $failed}
         $null=Complete-RunReport -RunContext $run -Status Failed -ErrorMessage $_.Exception.Message
     }
+    if(-not $run){Write-DeploymentStatus -Stage Deployment -Status Error -Message 'Input validation or initialization failed; see the error below.'}
     throw
 }

@@ -18,8 +18,10 @@ function Test-SqlDatabaseAccess {
         $parameters.Query = "SELECT name FROM sys.database_principals WHERE name=N'$literal'"
     }
     foreach ($db in $Resources.databases) {
+        Write-DeploymentStatus -Stage Verification -Status Read -Message "Checking $mode SQL access to database $($db.name)..."
         $found = @(Invoke-Sqlcmd @parameters -Database $db.name)
         $checkName = if ($mode -eq 'Sql') { "databaseSqlConnectivity:$($db.key)" } else { "databaseIdentity:$($db.key)" }
+        Write-DeploymentStatus -Stage Verification -Status $(if($found.Count){'Success'}else{'Error'}) -Message "Database $($db.name) access check completed; ready: $($found.Count -gt 0)."
         [pscustomobject]@{name=$checkName;ready=($found.Count -gt 0);resourceId=$db.id;authenticationMode=$mode}
     }
 }
@@ -49,10 +51,12 @@ function Test-ProvisionedInfrastructure {
 
 function Test-WebReleaseHealth {
     param($Configuration,$Resources)
-    if(-not $Configuration.deploymentNetwork.targets.appServiceMain){return [pscustomobject]@{status='Skipped';reason='Public app health access is not enabled.'}}
+    if(-not $Configuration.deploymentNetwork.targets.appServiceMain){Write-DeploymentStatus -Stage Verification -Status Warning -Message 'Web health request skipped: main-site health access is not enabled.';return [pscustomobject]@{status='Skipped';reason='Public app health access is not enabled.'}}
     $path=$Configuration.application.web.healthPath;if(-not $path.StartsWith('/')){$path="/$path"};$uri="https://$($Resources.appService.webApp.hostName)$path"
+    Write-DeploymentStatus -Stage Verification -Status Read -Message 'Requesting the configured web health endpoint...'
     $response=Invoke-WebRequest -Uri $uri -Method Get -TimeoutSec 60 -SkipHttpErrorCheck -ErrorAction Stop
     if($response.StatusCode -lt 200 -or $response.StatusCode -ge 400){throw "Web health check returned HTTP $($response.StatusCode) from $uri."}
+    Write-DeploymentStatus -Stage Verification -Status Success -Message "Web health check passed (HTTP $($response.StatusCode))."
     [pscustomobject]@{status='Passed';uri=$uri;statusCode=$response.StatusCode}
 }
 

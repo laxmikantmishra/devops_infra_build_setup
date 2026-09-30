@@ -63,7 +63,9 @@ Describe 'SQL server creation' {
             $credential=[pscredential]::new('sqladmin',(ConvertTo-SecureString 'test-only' -AsPlainText -Force))
         }
         It 'creates with SQL credentials without assigning an Entra administrator' {
-            $result=Resolve-SqlServer $configuration -SqlAdministratorCredential $credential
+            $result=Resolve-SqlServer $configuration -SqlAdministratorCredential $credential -InformationVariable messages
+            ($messages.MessageData -join " ") | Should -Match '\[READ\].*Retrieving SQL server'
+            ($messages.MessageData -join " ") | Should -Match '\[CREATE\].*Create Azure SQL logical server'
             $result.action | Should -Be 'Create'
             Should -Invoke New-AzSqlServer -Times 1 -Exactly -ParameterFilter { $SqlAdministratorCredentials -eq $credential }
             Should -Invoke Set-AzSqlServerActiveDirectoryAdministrator -Times 0 -Exactly
@@ -75,7 +77,8 @@ Describe 'SQL server creation' {
             Should -Invoke Set-AzSqlServerActiveDirectoryAdministrator -Times 0 -Exactly
         }
         It 'does not create resources in preview' {
-            $null=Resolve-SqlServer $configuration -SqlAdministratorCredential $credential -WhatIf
+            $null=Resolve-SqlServer $configuration -SqlAdministratorCredential $credential -WhatIf -InformationVariable messages
+            ($messages.MessageData -join " ") | Should -Not -Match '\[CREATE\]|\[SUCCESS\]'
             Should -Invoke New-AzSqlServer -Times 0 -Exactly
             Should -Invoke Set-AzSqlServerActiveDirectoryAdministrator -Times 0 -Exactly
         }

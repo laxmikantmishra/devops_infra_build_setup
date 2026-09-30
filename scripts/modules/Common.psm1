@@ -11,12 +11,24 @@ function New-RunContext {
     [pscustomobject]@{ RunId=$runId; Environment=$Environment; Operation=$Operation; StartedAtUtc=(Get-Date).ToUniversalTime().ToString('o'); Directory=$runDirectory; WhatIf=[bool]$WhatIf; Events=[Collections.Generic.List[object]]::new() }
 }
 
+function Write-DeploymentStatus {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][string]$Stage,
+        [Parameter(Mandatory)][string]$Message,
+        [ValidateSet('Info','Read','Create','Reuse','Update','Cleanup','Warning','Error','Plan','Success')][string]$Status='Info'
+    )
+    # Information stream stays visible when callers capture the typed result.
+    # Callers supply only descriptions and non-secret resource names, never payloads.
+    $line = '[{0}] [{1}] [{2}] {3}' -f (Get-Date).ToUniversalTime().ToString('HH:mm:ssZ'),$Status.ToUpperInvariant(),$Stage,$Message
+    Write-Information -MessageData $line -Tags 'DeploymentStatus',$Stage -InformationAction Continue
+}
+
 function Add-RunEvent {
     [CmdletBinding()]
     param([Parameter(Mandatory)]$RunContext,[Parameter(Mandatory)][ValidateSet('Info','Warning','Error','Plan','Success')][string]$Level,[Parameter(Mandatory)][string]$Message,[hashtable]$Data=@{})
     $RunContext.Events.Add([pscustomobject][ordered]@{ timestampUtc=(Get-Date).ToUniversalTime().ToString('o'); level=$Level; message=$Message; data=$Data })
-    $color = switch ($Level) { Error {'Red'} Warning {'Yellow'} Success {'Green'} Plan {'Cyan'} default {'Gray'} }
-    Write-Host ('[{0}] {1}' -f $Level.ToUpperInvariant(),$Message) -ForegroundColor $color
+    Write-DeploymentStatus -Stage $RunContext.Operation -Status $Level -Message $Message
 }
 
 function Write-JsonFileAtomic {
@@ -69,7 +81,12 @@ function Get-SqlAuthenticationMode {
 function Complete-RunReport {
     param([Parameter(Mandatory)]$RunContext,[Parameter(Mandatory)][string]$Status,[string]$ErrorMessage)
     $report=[ordered]@{schemaVersion='1.0';runId=$RunContext.RunId;environment=$RunContext.Environment;operation=$RunContext.Operation;status=$Status;startedAtUtc=$RunContext.StartedAtUtc;completedAtUtc=(Get-Date).ToUniversalTime().ToString('o');whatIf=$RunContext.WhatIf;error=$ErrorMessage;events=@($RunContext.Events)}
-    if(-not $RunContext.WhatIf){Write-JsonFileAtomic -Path (Join-Path $RunContext.Directory 'run-report.json') -InputObject $report};[pscustomobject]$report
+    if(-not $RunContext.WhatIf){Write-JsonFileAtomic -Path (Join-Path $RunContext.Directory 'run-report.json') -InputObject $report}
+    $elapsed = [math]::Round(((Get-Date).ToUniversalTime() - [datetime]::Parse($RunContext.StartedAtUtc).ToUniversalTime()).TotalSeconds,1)
+    $level = switch ($Status) { 'Failed' {'Error'} 'Preview' {'Plan'} default {'Success'} }
+    Write-DeploymentStatus -Stage $RunContext.Operation -Status $level -Message "$Status after ${elapsed}s."
+    if (-not $RunContext.WhatIf) { Write-DeploymentStatus -Stage $RunContext.Operation -Message "Run reports: $($RunContext.Directory)" }
+    [pscustomobject]$report
 }
 
-Export-ModuleMember -Function New-RunContext,Add-RunEvent,Write-JsonFileAtomic,Get-FileSha256,Get-ScriptsSha256,ConvertTo-PlainHashtable,Test-StringPresent,ConvertTo-BooleanValue,Assert-ValueInSet,Assert-AzureResourceId,Get-ResourceIdPart,Get-PublicIPv4FromCidr,Complete-RunReport,Get-SqlAuthenticationMode
+Export-ModuleMember -Function New-RunContext,Add-RunEvent,Write-JsonFileAtomic,Get-FileSha256,Get-ScriptsSha256,ConvertTo-PlainHashtable,Test-StringPresent,ConvertTo-BooleanValue,Assert-ValueInSet,Assert-AzureResourceId,Get-ResourceIdPart,Get-PublicIPv4FromCidr,Complete-RunReport,Get-SqlAuthenticationMode,Write-DeploymentStatus

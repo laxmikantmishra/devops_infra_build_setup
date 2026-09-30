@@ -376,6 +376,25 @@ The default `DEPLOYMENT_ALLOW_APP_SERVICE_MAIN=false` skips the scripted web hea
 
 Temporary network grants are removed after the run, so later manual SQL connections may need separately authorized access. A manifest records observed readiness; it does not promise permanently open endpoints.
 
+### Reading console status
+
+All three scripts display status by default; no `-Verbose` switch is needed. Messages include a UTC timestamp, an action/status label, the current stage, and a non-secret resource name when relevant. For example, a new Bootstrap run can show messages like these (illustrative output, not a deployment record):
+
+```text
+[10:15:01Z] [READ] [Subscription] Retrieving subscription ...
+[10:15:02Z] [SUCCESS] [Subscription] Subscription verified: ...; state Enabled.
+[10:15:03Z] [UPDATE] [Bootstrap] Registering Azure resource provider Microsoft.Sql...
+[10:15:05Z] [READ] [ResourceGroup] Retrieving resource group AEY-EU-SWARMS-SANDBOX-RG-01...
+[10:15:06Z] [CREATE] [ResourceGroup] Create Azure resource group: AEY-EU-SWARMS-SANDBOX-RG-01...
+[10:15:10Z] [SUCCESS] [Bootstrap] Resource group resolution completed.
+```
+
+Provisioning additionally prints `[1/10]` through `[10/10]` for infrastructure resolution, followed by access configuration, readiness checks, and network cleanup. Existing compatible resources report reuse where resolved; release targets report their returned status. The final summary includes total elapsed seconds and the report directory for a non-preview run.
+
+`READ`, `CREATE`, `UPDATE`, and `CLEANUP` identify the operation being started; they do not mean that operation has already succeeded. Azure calls can take several minutes. The last message identifies the current operation while the call is in progress; these messages are not a continuously updating percentage or heartbeat. An error stops the workflow and produces a failure summary when a run context exists. A skipped web health check is shown as a warning.
+
+Preview retains PowerShell's `What if:` messages and ends with `PLAN`/`Preview`, without claiming actual resource creation. Status stays visible even when you capture a result, such as `$bootstrapResult = ./scripts/Bootstrap.ps1 ...`, because it uses the separate information stream. Returned result objects and artifact formats remain usable. Orchestrator stage events are recorded in `run-report.json`; detailed resource progress is console output. Messages describe operations without printing SQL credentials, tokens, setting values, or API payloads.
+
 ## 9. Troubleshooting and recovery
 
 Stop at the first failed step. Preserve the full error text, command, and reported run directory, with secrets removed. If input validation failed before run initialization, there may be no report. Otherwise inspect that run's `run-report.json`, and `release-report.json` for a failed release when available.
@@ -391,6 +410,7 @@ Stop at the first failed step. Preserve the full error text, command, and report
 | `SQL_AUTHENTICATION_MODE must be one of ...` or unknown/duplicate env key | Use exactly `Sql` or `Entra`; fix the stated key/line. Env files are data, not executable PowerShell |
 | Required runtime, worker OS, executable, or SSH key error | Fill the relevant fields in step 3/6; use an existing absolute public-key path for Linux |
 | Public IPv4 `/32` is missing or rejected | Supply confirmed public egress IPv4/32. Private LAN, broad CIDRs and documentation/example ranges are rejected |
+| `Get-AzResourceProvider: Error while copying content to a stream` | Provider metadata could not be transferred. The updated scripts retry recognizable transient reads up to three times (2s then 4s delays). If it persists, follow the diagnostic steps below; do not assume the provider is missing or change SQL settings |
 | Azure authorization failure | Have the administrator review the denied Azure operation and scope; a SQL login cannot authorize Azure resource creation or role assignments |
 | Azure tenant/subscription mismatch | Correct the explicit IDs and use the intended account. Interactive/DeviceCode are available; `ExistingContext` requires an already matching context |
 | SQL login failure | Confirm the server, current SQL username/password, and database access. An existing server password is not reset; Entra-only server policy needs a separate approved review |
@@ -399,6 +419,42 @@ Stop at the first failed step. Preserve the full error text, command, and report
 | Resource location, OS, name conflict or quota failure | Correct the actual configuration/approved resource choice; do not change eastus, rename resources randomly, or delete resources to bypass it |
 | Artifact path or worker executable missing | Build the real package, verify its location/layout, and update release settings before retrying |
 | `CleanupFailed` or interrupted process | Inspect the run's `network-access.json` and live rules. Verify ownership, scope and exact rule state before any cleanup; preserve unrelated/equivalent rules |
+
+### Provider metadata stream-copy failure after login
+
+`Get-AzResourceProvider` is a read of Azure provider registration metadata. The stream-copy message alone does not identify whether the cause is a transient response interruption, VPN/proxy transport problem, or module/environment issue. Successful Azure login does not prove subsequent Resource Manager responses can be transferred successfully. This is separate from SQL authentication and database firewall access. See [Get-AzResourceProvider](https://learn.microsoft.com/powershell/module/az.resources/get-azresourceprovider).
+
+The updated lookup uses the authenticated context explicitly and retries only recognizable transient read failures. It buffers each response, rejects empty/inconsistent results, and stops after three attempts. Authorization and certificate errors are not retried. Provider registration writes are not automatically replayed when a subsequent read fails.
+
+In the same PowerShell session, collect the loaded versions without dumping credentials or enabling HTTP debug tracing:
+
+```powershell
+$PSVersionTable.PSVersion
+Get-Module Az.Accounts, Az.Resources | Select-Object Name, Version
+```
+
+To test just the failing read, use the namespace printed immediately before the error (the example below uses `Microsoft.Sql`). This makes no Azure changes:
+
+```powershell
+$providerNamespace = 'Microsoft.Sql' # Replace with the namespace shown in your error.
+$config = Import-EnvironmentConfiguration -Path $configPath
+$context = Get-AzContext -ErrorAction Stop
+if ($null -eq $context -or $context.Tenant.Id -ne $config.tenantId -or $context.Subscription.Id -ne $config.subscriptionId) {
+    throw 'Use the intended authenticated tenant/subscription context before this diagnostic read.'
+}
+try {
+    Get-AzResourceProvider -ProviderNamespace $providerNamespace -DefaultProfile $context -ErrorAction Stop |
+        Select-Object ProviderNamespace, RegistrationState
+} catch {
+    $_.Exception.GetType().FullName
+    $_.Exception.Message
+    $_.Exception.GetBaseException().Message
+}
+```
+
+If this isolated read fails too, check approved VPN/proxy connectivity to Azure Resource Manager with your network administrator and compare loaded module versions with step 2. Do not disable certificate validation or security controls. Reopen PowerShell and load the tested versions if you find a module mismatch. Then retry the script you were running; do not proceed to Provisioning unless Bootstrap completed successfully.
+
+If the issue persists, share the script name, provider namespace, loaded versions, and the short exception messages with secrets removed. The scripts retain the original exception as `InnerException` after exhausting retries; there is no claim that a retry fixes a persistent network or certificate problem.
 
 Correct the cause before rerunning. A partial run may have created resources; the scripts re-resolve exact names on rerun, but they do not roll back already created infrastructure. No need to rerun successful Bootstrap solely for a SQL-mode change.
 

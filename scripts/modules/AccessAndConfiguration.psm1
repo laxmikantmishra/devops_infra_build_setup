@@ -6,7 +6,7 @@ function Ensure-RoleAssignment {
     param([string]$ObjectId,[string]$RoleDefinitionId,[string]$RoleName,[string]$Scope)
     $existing = Get-AzRoleAssignment -ObjectId $ObjectId -Scope $Scope -ErrorAction Stop | Where-Object RoleDefinitionId -Match "$RoleDefinitionId$"
     if ($existing) { return [pscustomobject]@{ role=$RoleName; scope=$Scope; action='Reuse' } }
-    if ($PSCmdlet.ShouldProcess($Scope,"Assign $RoleName to managed identity")) {
+    if ($PSCmdlet.ShouldProcess($Scope,"Assign $RoleName to managed identity")) {Write-DeploymentStatus -Stage AccessAndConfiguration -Status Update -Message ("{0}: {1}..." -f "Assign $RoleName to managed identity",$Scope);
         $null = New-AzRoleAssignment -ObjectId $ObjectId -RoleDefinitionId $RoleDefinitionId -Scope $Scope -ErrorAction Stop
         return [pscustomobject]@{ role=$RoleName; scope=$Scope; action='Create' }
     }
@@ -16,7 +16,7 @@ function Ensure-RoleAssignment {
 function Set-SqlManagedIdentityUsers {
     [CmdletBinding(SupportsShouldProcess)]
     param($Configuration,$Resources)
-    if ((Get-SqlAuthenticationMode $Configuration) -eq 'Sql') { return }
+    if ((Get-SqlAuthenticationMode $Configuration) -eq 'Sql') { Write-DeploymentStatus -Stage AccessAndConfiguration -Message 'SQL authentication selected: skipping Entra SQL user setup.'; return }
     if (-not (Get-Module -ListAvailable SqlServer)) { throw 'The SqlServer PowerShell module is required to configure the managed identity in databases.' }
     Import-Module SqlServer -ErrorAction Stop
     $tokenResult = Get-AzAccessToken -ResourceUrl 'https://database.windows.net' -ErrorAction Stop
@@ -30,7 +30,7 @@ function Set-SqlManagedIdentityUsers {
             if ($role -notmatch '^db_[A-Za-z0-9_]+$') { throw "Unsafe SQL role name '$role'." }
             $commands.Add("IF IS_ROLEMEMBER(N'$role', N'$identityLiteral') <> 1 ALTER ROLE [$role] ADD MEMBER [$identityName];")
         }
-        if ($PSCmdlet.ShouldProcess($database.name,'Create managed identity database user and role memberships')) {
+        if ($PSCmdlet.ShouldProcess($database.name,'Create managed identity database user and role memberships')) {Write-DeploymentStatus -Stage AccessAndConfiguration -Status Create -Message ("{0}: {1}..." -f 'Create managed identity database user and role memberships',$database.name);
             Invoke-Sqlcmd -ServerInstance $Resources.sqlServer.fullyQualifiedDomainName -Database $database.name -AccessToken $token -Query ($commands -join "`n") -Encrypt Mandatory -ErrorAction Stop | Out-Null
         }
     }
@@ -47,13 +47,13 @@ function Invoke-AccessAndConfiguration {
     $results.Add((Ensure-RoleAssignment -ObjectId $Resources.managedIdentity.principalId -RoleDefinitionId '3913510d-42f4-4e42-8a64-420c390055eb' -RoleName 'Monitoring Metrics Publisher' -Scope $Resources.monitoring.applicationInsights.id -WhatIf:$WhatIfPreference))
 
     $containerId = "$($Resources.deploymentStorage.id)/blobServices/default/containers/$($Resources.deploymentStorage.container)"
-    if ($PSCmdlet.ShouldProcess($Resources.deploymentStorage.container,'Create or update private release container')) {
+    if ($PSCmdlet.ShouldProcess($Resources.deploymentStorage.container,'Create or update private release container')) {Write-DeploymentStatus -Stage AccessAndConfiguration -Status Create -Message ("{0}: {1}..." -f 'Create or update private release container',$Resources.deploymentStorage.container);
         $response = Invoke-AzRestMethod -Method PUT -Path "${containerId}?api-version=2023-05-01" -Payload '{"properties":{"publicAccess":"None"}}' -ErrorAction Stop
         if ($response.StatusCode -notin 200,201) { throw "Creating release container failed with HTTP $($response.StatusCode): $($response.Content)" }
     }
 
     $webId = $Resources.appService.webApp.id
-    if ($PSCmdlet.ShouldProcess($Resources.appService.webApp.name,'Attach shared managed identity and configure telemetry')) {
+    if ($PSCmdlet.ShouldProcess($Resources.appService.webApp.name,'Attach shared managed identity and configure telemetry')) {Write-DeploymentStatus -Stage AccessAndConfiguration -Status Update -Message ("{0}: {1}..." -f 'Attach shared managed identity and configure telemetry',$Resources.appService.webApp.name);
         $webBefore=Get-AzWebApp -ResourceGroupName $Configuration.resourceGroup.name -Name $Resources.appService.webApp.name -ErrorAction Stop;$identityMap=[ordered]@{}
         if($webBefore.Identity -and $webBefore.Identity.UserAssignedIdentities){foreach($id in $webBefore.Identity.UserAssignedIdentities.Keys){$identityMap[$id]=[ordered]@{}}};$identityMap[$Resources.managedIdentity.id]=[ordered]@{}
         $identityType=if($webBefore.Identity -and [string]$webBefore.Identity.Type -match 'SystemAssigned'){'SystemAssigned, UserAssigned'}else{'UserAssigned'}
@@ -73,10 +73,10 @@ function Invoke-AccessAndConfiguration {
 
     $vm = Get-AzVM -ResourceGroupName $Configuration.resourceGroup.name -Name $Resources.workerVm.name -ErrorAction Stop
     $assigned = $vm.Identity -and $vm.Identity.UserAssignedIdentities -and $vm.Identity.UserAssignedIdentities.Keys -contains $Resources.managedIdentity.id
-    if (-not $assigned -and $PSCmdlet.ShouldProcess($Resources.workerVm.name,'Attach shared managed identity')) { $identityIds=@($Resources.managedIdentity.id);if($vm.Identity -and $vm.Identity.UserAssignedIdentities){$identityIds+=@($vm.Identity.UserAssignedIdentities.Keys)};$identityType=if($vm.Identity -and [string]$vm.Identity.Type -match 'SystemAssigned'){'SystemAssignedUserAssigned'}else{'UserAssigned'};Update-AzVM -ResourceGroupName $Configuration.resourceGroup.name -VM $vm -IdentityType $identityType -IdentityID @($identityIds|Select-Object -Unique) -ErrorAction Stop | Out-Null }
+    if (-not $assigned -and $PSCmdlet.ShouldProcess($Resources.workerVm.name,'Attach shared managed identity')) {Write-DeploymentStatus -Stage AccessAndConfiguration -Status Update -Message ("{0}: {1}..." -f 'Attach shared managed identity',$Resources.workerVm.name); $identityIds=@($Resources.managedIdentity.id);if($vm.Identity -and $vm.Identity.UserAssignedIdentities){$identityIds+=@($vm.Identity.UserAssignedIdentities.Keys)};$identityType=if($vm.Identity -and [string]$vm.Identity.Type -match 'SystemAssigned'){'SystemAssignedUserAssigned'}else{'UserAssigned'};Update-AzVM -ResourceGroupName $Configuration.resourceGroup.name -VM $vm -IdentityType $identityType -IdentityID @($identityIds|Select-Object -Unique) -ErrorAction Stop | Out-Null }
     foreach($rule in @(@{name="$($Configuration.naming.resourceNamePrefix)-SQLVNET-APP-01";subnet=$Resources.network.appSubnetId},@{name="$($Configuration.naming.resourceNamePrefix)-SQLVNET-WORKER-01";subnet=$Resources.network.workerSubnetId})){
         $existing=Get-AzSqlServerVirtualNetworkRule -ResourceGroupName $Configuration.resourceGroup.name -ServerName $Resources.sqlServer.name -VirtualNetworkRuleName $rule.name -ErrorAction SilentlyContinue
-        if(-not $existing -and $PSCmdlet.ShouldProcess($Resources.sqlServer.name,"Add SQL virtual network rule $($rule.name)")){New-AzSqlServerVirtualNetworkRule -ResourceGroupName $Configuration.resourceGroup.name -ServerName $Resources.sqlServer.name -VirtualNetworkRuleName $rule.name -VirtualNetworkSubnetId $rule.subnet -ErrorAction Stop|Out-Null}
+        if(-not $existing -and $PSCmdlet.ShouldProcess($Resources.sqlServer.name,"Add SQL virtual network rule $($rule.name)")){Write-DeploymentStatus -Stage AccessAndConfiguration -Status Update -Message ("{0}: {1}..." -f "Add SQL virtual network rule $($rule.name)",$Resources.sqlServer.name);New-AzSqlServerVirtualNetworkRule -ResourceGroupName $Configuration.resourceGroup.name -ServerName $Resources.sqlServer.name -VirtualNetworkRuleName $rule.name -VirtualNetworkSubnetId $rule.subnet -ErrorAction Stop|Out-Null}
         elseif($existing -and $existing.VirtualNetworkSubnetId -ne $rule.subnet){throw "SQL virtual network rule '$($rule.name)' points to a different subnet."}
     }
     Set-SqlManagedIdentityUsers -Configuration $Configuration -Resources $Resources -WhatIf:$WhatIfPreference

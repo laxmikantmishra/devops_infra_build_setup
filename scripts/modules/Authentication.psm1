@@ -8,6 +8,7 @@ function Connect-DeploymentAzure {
  $mode=if(Test-StringPresent $AuthMode){$AuthMode}else{$Configuration.authentication.mode};if(-not(Test-StringPresent $mode)){$mode='Interactive'}
  $clientId=if(Test-StringPresent $AuthClientId){$AuthClientId}else{$Configuration.authentication.clientId};$thumb=if(Test-StringPresent $CertificateThumbprint){$CertificateThumbprint}else{$Configuration.authentication.certificateThumbprint}
  if($NonInteractive -and $mode -in 'Interactive','DeviceCode'){throw "AuthMode '$mode' cannot be used with -NonInteractive."}
+ Write-DeploymentStatus -Stage Authentication -Message "Authenticating with $mode for tenant $($Configuration.tenantId), subscription $($Configuration.subscriptionId)..."
  switch($mode){
   'Interactive'{[void](Connect-AzAccount -Tenant $Configuration.tenantId -Subscription $Configuration.subscriptionId -Scope Process -ErrorAction Stop)}
   'DeviceCode'{[void](Connect-AzAccount -Tenant $Configuration.tenantId -Subscription $Configuration.subscriptionId -UseDeviceAuthentication -Scope Process -ErrorAction Stop)}
@@ -16,8 +17,10 @@ function Connect-DeploymentAzure {
   'ManagedIdentity'{if(Test-StringPresent $clientId){[void](Connect-AzAccount -Identity -AccountId $clientId -Subscription $Configuration.subscriptionId -Scope Process -ErrorAction Stop)}else{[void](Connect-AzAccount -Identity -Subscription $Configuration.subscriptionId -Scope Process -ErrorAction Stop)}}
   default{throw "Unsupported AuthMode '$mode'."}
  }
+ Write-DeploymentStatus -Stage Authentication -Status Read -Message 'Checking the authenticated Azure context...'
  $context=Get-AzContext -ErrorAction Stop;if($null -eq $context -or $context.Subscription.Id -ne $Configuration.subscriptionId -or $context.Tenant.Id -ne $Configuration.tenantId){throw "Azure context mismatch. Expected tenant '$($Configuration.tenantId)' subscription '$($Configuration.subscriptionId)'."}
  [void](Set-AzContext -Tenant $Configuration.tenantId -Subscription $Configuration.subscriptionId -Scope Process -ErrorAction Stop)
+ Write-DeploymentStatus -Stage Authentication -Status Success -Message 'Azure tenant and subscription context verified.'
  [pscustomobject]@{Mode=$mode;TenantId=$context.Tenant.Id;SubscriptionId=$context.Subscription.Id;AccountId=$context.Account.Id;Context=(Get-AzContext)}
 }
 
