@@ -261,6 +261,36 @@ Provisioning creates/resolves the network, monitoring, vault, deployment storage
 
 SQL readiness is a read-only connectivity query using the supplied login in each database. It does not prove migration privileges or the application's runtime SQL access. Credentials are passed in memory as `PSCredential` objects and are not exported. See [New-AzSqlServer](https://learn.microsoft.com/powershell/module/az.sql/new-azsqlserver) and [Invoke-Sqlcmd](https://learn.microsoft.com/powershell/module/sqlserver/invoke-sqlcmd).
 
+### Combined SQL and Windows VM credentials, including reruns
+
+For a Windows worker, this is an alternative to the parameter-table command above. Run it from the repository root in PowerShell. Obtain both credentials in the same session; do not run both apply examples for a single provisioning attempt.
+
+```powershell
+$sqlAdmin = Get-Credential -Message 'Azure SQL administrator / provisioning connectivity login'
+$vmAdmin = Get-Credential -Message 'Windows worker VM administrator'
+
+# Preview first. This does not create resources or publish a manifest.
+./scripts/Provisioning.ps1 -ConfigPath ./config/sandbox.env -WhatIf
+
+# Apply after reviewing the preview.
+$provisionResult = ./scripts/Provisioning.ps1 `
+    -ConfigPath ./config/sandbox.env `
+    -SqlAdministratorCredential $sqlAdmin `
+    -VmAdministratorCredential $vmAdmin
+
+if ($provisionResult.Status -ne 'Succeeded') { throw 'Provisioning did not succeed.' }
+$provisionResult | Format-List Status, ArtifactPath, RunDirectory
+$manifestPath = $provisionResult.ArtifactPath
+```
+
+Use `WORKER_OS=Windows` only when it matches the actual worker. For a new VM, the username/password entered in `$vmAdmin` become its guest administrator credentials. For an existing VM, supplying this parameter does not reset its password. For an existing SQL server, supply its current SQL credentials; those are not reset either. Keep both passwords out of configuration, packages, and output artifacts.
+
+For a Linux worker, omit `-VmAdministratorCredential` and configure `WORKER_SSH_PUBLIC_KEY_PATH` for creation instead. SQL credentials are still required for SQL-mode provisioning readiness checks.
+
+You can rerun normal Provisioning with the same configuration and resource names to address missing resources or configuration. It resolves existing resources and reuses compatible ones, but can still apply owned settings, identity/permission changes, and authorized network rules. Preview is a high-level plan, not a guarantee that a rerun will make no changes. Do not delete resources already created or rerun successful Bootstrap solely for this credential change. Keep the newly returned manifest path for subsequent releases.
+
+If provisioning already succeeded and you only want to check readiness, use `-ReuseOnly` below. A VM administrator credential is unnecessary for that read-only workflow because it cannot create a VM.
+
 ### Fully existing infrastructure only
 
 If all resources, attachments, grants and network routes already exist, obtain `$sqlAdmin` as above and use:
@@ -411,6 +441,7 @@ Stop at the first failed step. Preserve the full error text, command, and report
 | Required runtime, worker OS, executable, or SSH key error | Fill the relevant fields in step 3/6; use an existing absolute public-key path for Linux |
 | Public IPv4 `/32` is missing or rejected | Supply confirmed public egress IPv4/32. Private LAN, broad CIDRs and documentation/example ranges are rejected |
 | `Get-AzResourceProvider: Error while copying content to a stream` | Provider metadata could not be transferred. The updated scripts retry recognizable transient reads up to three times (2s then 4s delays). If it persists, follow the diagnostic steps below; do not assume the provider is missing or change SQL settings |
+| `Resolve-KeyVault` / `New-AzKeyVault`: parameter `EnableRbacAuthorization` not found | Use the updated `scripts/modules/resources/KeyVault.psm1`. Az.KeyVault 6.x uses `DisableRbacAuthorization`; the fixed call passes it as false to keep RBAC enabled and re-reads the vault to verify. Keep `KEY_VAULT_ENABLE_RBAC=true`. Rerun Provisioning with the same credentials; no Bootstrap rerun or resource deletion is required |
 | Azure authorization failure | Have the administrator review the denied Azure operation and scope; a SQL login cannot authorize Azure resource creation or role assignments |
 | Azure tenant/subscription mismatch | Correct the explicit IDs and use the intended account. Interactive/DeviceCode are available; `ExistingContext` requires an already matching context |
 | SQL login failure | Confirm the server, current SQL username/password, and database access. An existing server password is not reset; Entra-only server policy needs a separate approved review |

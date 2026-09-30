@@ -21,3 +21,5 @@ Local parsing, module import, command-parameter checks, PSScriptAnalyzer, and un
 | PSScriptAnalyzer | 1.25.0 |
 
 PowerShell 7.4 is the minimum supported runtime. These exact module versions are the tested baseline; later compatible versions can be evaluated by running the same unit, analyzer, and command-contract checks before use.
+
+Key Vault creation uses `New-AzKeyVault -DisableRbacAuthorization:$false` with the tested Az.KeyVault 6.6.1 interface. The removed `-EnableRbacAuthorization` parameter must not be passed. Existing vaults are checked without switching their authorization model; newly created vaults are re-read to verify RBAC. The local Key Vault tests validate creation parameter names against installed cmdlet metadata as well as mock creation/reuse/preview behavior. See [Microsoft cmdlet documentation](https://learn.microsoft.com/powershell/module/az.keyvault/new-azkeyvault).
